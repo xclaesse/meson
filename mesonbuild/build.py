@@ -371,16 +371,8 @@ a hard error in the future.''' % name)
         self.option_overrides = self.parse_overrides(kwargs)
 
     def parse_overrides(self, kwargs):
-        result = {}
         overrides = stringlistify(kwargs.get('override_options', []))
-        for o in overrides:
-            if '=' not in o:
-                raise InvalidArguments('Overrides must be of form "key=value"')
-            k, v = o.split('=', 1)
-            k = k.strip()
-            v = v.strip()
-            result[k] = v
-        return result
+        return environment.coredata.create_options_dict(overrides)
 
     def is_linkable_target(self):
         return False
