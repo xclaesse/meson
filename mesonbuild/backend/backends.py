@@ -100,29 +100,6 @@ class TestSerialisation:
         self.workdir = workdir
         self.extra_paths = extra_paths
 
-class OptionProxy:
-    def __init__(self, name, value):
-        self.name = name
-        self.value = value
-
-class OptionOverrideProxy:
-    '''Mimic an option list but transparently override
-    selected option values.'''
-    def __init__(self, overrides, *options):
-        self.overrides = overrides
-        self.options = options
-
-    def __getitem__(self, option_name):
-        for opts in self.options:
-            if option_name in opts:
-                return self._get_override(option_name, opts[option_name])
-        raise KeyError('Option not found', option_name)
-
-    def _get_override(self, option_name, base_opt):
-        if option_name in self.overrides:
-            return OptionProxy(base_opt.name, base_opt.validate_value(self.overrides[option_name]))
-        return base_opt
-
 # This class contains the basic functionality that is needed by all backends.
 # Feel free to move stuff in and out of it as you see fit.
 class Backend:
@@ -146,10 +123,6 @@ class Backend:
 
     def get_target_filename_abs(self, target):
         return os.path.join(self.environment.get_build_dir(), self.get_target_filename(target))
-
-    def get_builtin_options_for_target(self, target):
-        return OptionOverrideProxy(target.option_overrides,
-                                   self.environment.coredata.builtins)
 
     def get_option_for_target(self, option_name, target):
         return target.get_option_value(option_name)
