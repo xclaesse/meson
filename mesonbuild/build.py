@@ -1165,6 +1165,9 @@ This is not permitted on OSX''')
 recommended as it is not supported on some platforms''')
                 return
 
+    def get_option_value(self, optname):
+        return self.environment.coredata.get_option_value(optname, self.subproject, self.option_overrides)
+
 class Generator:
     def __init__(self, args, kwargs):
         if len(args) != 1:

@@ -496,6 +496,12 @@ class CoreData:
 
         raise InterpreterException('Tried to access unknown option "%s".' % optname)
 
+    def get_option_value(self, optname, subproject, overrides={}):
+        opt = self.get_option(optname, subproject)
+        if optname in overrides:
+            return opt.validate_value(overrides[optname])
+        return opt.value
+
 def load(build_dir):
     filename = os.path.join(build_dir, 'meson-private', 'coredata.dat')
     load_fail_msg = 'Coredata file {!r} is corrupted. Try with a fresh build tree.'.format(filename)
