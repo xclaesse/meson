@@ -942,10 +942,10 @@ class Compiler:
 
         return opts
 
-    def get_option_compile_args(self, options):
+    def get_option_compile_args(self, target):
         return []
 
-    def get_option_link_args(self, options):
+    def get_option_link_args(self, target):
         return []
 
     def check_header(self, *args, **kwargs):

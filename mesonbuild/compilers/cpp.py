@@ -142,14 +142,14 @@ class ClangCPPCompiler(ClangCompiler, CPPCompiler):
                                                          'none')})
         return opts
 
-    def get_option_compile_args(self, options):
+    def get_option_compile_args(self, target):
         args = []
-        std = options['cpp_std']
-        if std.value != 'none':
-            args.append(self._find_best_cpp_std(std.value))
+        std = target.get_option_value('cpp_std')
+        if std != 'none':
+            args.append(self._find_best_cpp_std(std))
         return args
 
-    def get_option_link_args(self, options):
+    def get_option_link_args(self, target):
         return []
 
     def language_stdlib_only_link_flags(self):
@@ -173,14 +173,14 @@ class ArmclangCPPCompiler(ArmclangCompiler, CPPCompiler):
                                                          'none')})
         return opts
 
-    def get_option_compile_args(self, options):
+    def get_option_compile_args(self, target):
         args = []
-        std = options['cpp_std']
-        if std.value != 'none':
-            args.append('-std=' + std.value)
+        std = target.get_option_value('cpp_std')
+        if std != 'none':
+            args.append('-std=' + std)
         return args
 
-    def get_option_link_args(self, options):
+    def get_option_link_args(self, target):
         return []
 
 
@@ -208,18 +208,18 @@ class GnuCPPCompiler(GnuCompiler, CPPCompiler):
                                                         gnu_winlibs), })
         return opts
 
-    def get_option_compile_args(self, options):
+    def get_option_compile_args(self, target):
         args = []
-        std = options['cpp_std']
-        if std.value != 'none':
-            args.append(self._find_best_cpp_std(std.value))
-        if options['cpp_debugstl'].value:
+        std = target.get_option_value('cpp_std')
+        if std != 'none':
+            args.append(self._find_best_cpp_std(std))
+        if target.get_option_value('cpp_debugstl'):
             args.append('-D_GLIBCXX_DEBUG=1')
         return args
 
-    def get_option_link_args(self, options):
+    def get_option_link_args(self, target):
         if self.compiler_type == CompilerType.GCC_MINGW:
-            return options['cpp_winlibs'].value[:]
+            return target.get_option_value('cpp_winlibs')
         return []
 
     def get_pch_use_args(self, pch_dir, header):
@@ -285,20 +285,20 @@ class IntelCPPCompiler(IntelCompiler, CPPCompiler):
                                                                 False)})
         return opts
 
-    def get_option_compile_args(self, options):
+    def get_option_compile_args(self, target):
         args = []
-        std = options['cpp_std']
-        if std.value != 'none':
+        std = target.get_option_value('cpp_std')
+        if std != 'none':
             remap_cpp03 = {
                 'c++03': 'c++98',
                 'gnu++03': 'gnu++98'
             }
-            args.append('-std=' + remap_cpp03.get(std.value, std.value))
-        if options['cpp_debugstl'].value:
+            args.append('-std=' + remap_cpp03.get(std, std))
+        if target.get_option_value('cpp_debugstl'):
             args.append('-D_GLIBCXX_DEBUG=1')
         return args
 
-    def get_option_link_args(self, options):
+    def get_option_link_args(self, target):
         return []
 
 
@@ -331,17 +331,17 @@ class VisualStudioCPPCompiler(VisualStudioCCompiler, CPPCompiler):
                                                              msvc_winlibs)})
         return opts
 
-    def get_option_compile_args(self, options):
+    def get_option_compile_args(self, target):
         args = []
 
-        eh = options['cpp_eh']
-        if eh.value != 'none':
-            args.append('/EH' + eh.value)
+        eh = target.get_option_value('cpp_eh')
+        if eh != 'none':
+            args.append('/EH' + eh)
 
-        std = options['cpp_std']
-        if std.value == 'none':
+        std = target.get_option_value('cpp_std')
+        if std == 'none':
             pass
-        elif std.value == 'c++11':
+        elif std == 'c++11':
             # Note: there is no explicit flag for supporting C++11; we attempt to do the best we can
             # which means setting the C++ standard version to C++14, in compilers that support it
             # (i.e., after VS2015U3)
@@ -353,12 +353,12 @@ class VisualStudioCPPCompiler(VisualStudioCCompiler, CPPCompiler):
             else:
                 mlog.warning('This version of MSVC does not support cpp_std arguments')
         else:
-            args.append('/std:' + std.value)
+            args.append('/std:' + std)
 
         return args
 
-    def get_option_link_args(self, options):
-        return options['cpp_winlibs'].value[:]
+    def get_option_link_args(self, target):
+        return target.get_option_value('cpp_winlibs')
 
     def get_compiler_check_args(self):
         # Visual Studio C++ compiler doesn't support -fpermissive,
@@ -378,16 +378,16 @@ class ArmCPPCompiler(ArmCompiler, CPPCompiler):
                                                          'none')})
         return opts
 
-    def get_option_compile_args(self, options):
+    def get_option_compile_args(self, target):
         args = []
-        std = options['cpp_std']
-        if std.value == 'c++11':
+        std = target.get_option_value('cpp_std')
+        if std == 'c++11':
             args.append('--cpp11')
-        elif std.value == 'c++03':
+        elif std == 'c++03':
             args.append('--cpp')
         return args
 
-    def get_option_link_args(self, options):
+    def get_option_link_args(self, target):
         return []
 
     def get_compiler_check_args(self):

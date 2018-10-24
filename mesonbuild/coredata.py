@@ -502,6 +502,15 @@ class CoreData:
             return opt.validate_value(overrides[optname])
         return opt.value
 
+class OptionsProxy:
+    def __init__(self, coredata, subproject, overrides):
+        self.coredata = coredata
+        self.subproject = subproject
+        self.overrides = overrides
+
+    def get_option_value(self, optname):
+        return self.coredata.get_option_value(optname, self.subproject, self.overrides)
+
 def load(build_dir):
     filename = os.path.join(build_dir, 'meson-private', 'coredata.dat')
     load_fail_msg = 'Coredata file {!r} is corrupted. Try with a fresh build tree.'.format(filename)

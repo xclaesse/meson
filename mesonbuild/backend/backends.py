@@ -156,11 +156,6 @@ class Backend:
                                    self.environment.coredata.builtins,
                                    self.environment.coredata.base_options)
 
-    def get_compiler_options_for_target(self, target):
-        return OptionOverrideProxy(target.option_overrides,
-                                   # no code depends on builtins for now
-                                   self.environment.coredata.compiler_options)
-
     def get_option_for_target(self, option_name, target):
         return target.get_option_value(option_name)
 
@@ -506,7 +501,6 @@ class Backend:
         # starting from hard-coded defaults followed by build options and so on.
         commands = CompilerArgs(compiler)
 
-        copt_proxy = self.get_compiler_options_for_target(target)
         # First, the trivial ones that are impossible to override.
         #
         # Add -nostdinc/-nostdinc++ if needed; can't be overridden
@@ -527,7 +521,7 @@ class Backend:
             commands += compiler.get_werror_args()
         # Add compile args for c_* or cpp_* build options set on the
         # command-line or default_options inside project().
-        commands += compiler.get_option_compile_args(copt_proxy)
+        commands += compiler.get_option_compile_args(target)
         # Add buildtype args: optimization level, debugging, etc.
         commands += compiler.get_buildtype_args(self.get_option_for_target('buildtype', target))
         commands += compiler.get_optimization_args(self.get_option_for_target('optimization', target))

@@ -961,9 +961,9 @@ class CompilerHolder(InterpreterObject):
                                     i.held_object.get_curdir(), idir)
                 args += self.compiler.get_include_args(idir, False)
         if not nobuiltins:
-            opts = self.environment.coredata.compiler_options
-            args += self.compiler.get_option_compile_args(opts)
-            args += self.compiler.get_option_link_args(opts)
+            proxy = coredata.OptionsProxy(self.environment.coredata, self.subproject)
+            args += self.compiler.get_option_compile_args(proxy)
+            args += self.compiler.get_option_link_args(proxy)
         args += mesonlib.stringlistify(kwargs.get('args', []))
         return args
 

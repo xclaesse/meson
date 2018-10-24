@@ -1116,14 +1116,14 @@ class ClangCCompiler(ClangCompiler, CCompiler):
                                                        'none')})
         return opts
 
-    def get_option_compile_args(self, options):
+    def get_option_compile_args(self, target):
         args = []
-        std = options['c_std']
-        if std.value != 'none':
-            args.append('-std=' + std.value)
+        std = target.get_option_value('c_std')
+        if std != 'none':
+            args.append('-std=' + std)
         return args
 
-    def get_option_link_args(self, options):
+    def get_option_link_args(self, target):
         return []
 
     def get_linker_always_args(self):
@@ -1150,14 +1150,14 @@ class ArmclangCCompiler(ArmclangCompiler, CCompiler):
                                                        'none')})
         return opts
 
-    def get_option_compile_args(self, options):
+    def get_option_compile_args(self, target):
         args = []
-        std = options['c_std']
-        if std.value != 'none':
-            args.append('-std=' + std.value)
+        std = target.get_option_value('c_std')
+        if std != 'none':
+            args.append('-std=' + std)
         return args
 
-    def get_option_link_args(self, options):
+    def get_option_link_args(self, target):
         return []
 
 
@@ -1182,16 +1182,16 @@ class GnuCCompiler(GnuCompiler, CCompiler):
                                                       gnu_winlibs), })
         return opts
 
-    def get_option_compile_args(self, options):
+    def get_option_compile_args(self, target):
         args = []
-        std = options['c_std']
-        if std.value != 'none':
-            args.append('-std=' + std.value)
+        std = target.get_option_value('c_std')
+        if std != 'none':
+            args.append('-std=' + std)
         return args
 
-    def get_option_link_args(self, options):
+    def get_option_link_args(self, target):
         if self.compiler_type == CompilerType.GCC_MINGW:
-            return options['c_winlibs'].value[:]
+            return target.get_option_value('c_winlibs')
         return []
 
     def get_pch_use_args(self, pch_dir, header):
@@ -1243,11 +1243,11 @@ class IntelCCompiler(IntelCompiler, CCompiler):
                                                        'none')})
         return opts
 
-    def get_option_compile_args(self, options):
+    def get_option_compile_args(self, target):
         args = []
-        std = options['c_std']
-        if std.value != 'none':
-            args.append('-std=' + std.value)
+        std = target.get_option_value('c_std')
+        if std != 'none':
+            args.append('-std=' + std)
         return args
 
 
@@ -1404,8 +1404,8 @@ class VisualStudioCCompiler(CCompiler):
                                                            msvc_winlibs)})
         return opts
 
-    def get_option_link_args(self, options):
-        return options['c_winlibs'].value[:]
+    def get_option_link_args(self, target):
+        return target.get_option_value('c_winlibs')
 
     @classmethod
     def unix_args_to_native(cls, args):
@@ -1553,9 +1553,9 @@ class ArmCCompiler(ArmCompiler, CCompiler):
                                                        'none')})
         return opts
 
-    def get_option_compile_args(self, options):
+    def get_option_compile_args(self, target):
         args = []
-        std = options['c_std']
-        if std.value != 'none':
-            args.append('--' + std.value)
+        std = target.get_option_value('c_std')
+        if std != 'none':
+            args.append('--' + std)
         return args
