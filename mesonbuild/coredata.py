@@ -459,6 +459,43 @@ class CoreData:
             sub = 'In subproject {}: '.format(subproject) if subproject else ''
             mlog.warning('{}Unknown options: "{}"'.format(sub, unknown_options))
 
+    def get_option(self, optname, subproject):
+        # Import it here to avoid import cycle
+        from .compilers import base_options
+        # Some base options are not defined in some environments, return the
+        # default value from base_options in that case.
+        for d in [self.base_options, base_options, self.builtins, self.compiler_options]:
+            try:
+                return d[optname]
+            except KeyError:
+                pass
+
+        raw_optname = optname
+        if subproject:
+            optname = subproject + ':' + optname
+
+        try:
+            opt = self.user_options[optname]
+            if opt.yielding and ':' in optname and raw_optname in self.user_options:
+                popt = self.user_options[raw_optname]
+                if type(opt) is type(popt):
+                    opt = popt
+                else:
+                    # Get class name, then option type as a string
+                    opt_type = opt.__class__.__name__[4:][:-6].lower()
+                    popt_type = popt.__class__.__name__[4:][:-6].lower()
+                    # This is not a hard error to avoid dependency hell, the workaround
+                    # when this happens is to simply set the subproject's option directly.
+                    mlog.warning('Option {0!r} of type {1!r} in subproject {2!r} cannot yield '
+                                 'to parent option of type {3!r}, ignoring parent value. '
+                                 'Use -D{2}:{0}=value to set the value for this option manually'
+                                 '.'.format(raw_optname, opt_type, subproject, popt_type))
+            return opt
+        except KeyError:
+            pass
+
+        raise InterpreterException('Tried to access unknown option "%s".' % optname)
+
 def load(build_dir):
     filename = os.path.join(build_dir, 'meson-private', 'coredata.dat')
     load_fail_msg = 'Coredata file {!r} is corrupted. Try with a fresh build tree.'.format(filename)

@@ -2314,42 +2314,6 @@ external dependencies (including libraries) must go to "dependencies".''')
         self.build_def_files += subi.build_def_files
         return self.subprojects[dirname]
 
-    def get_option_internal(self, optname):
-        # Some base options are not defined in some environments, return the
-        # default value from compilers.base_options in that case.
-        for d in [self.coredata.base_options, compilers.base_options,
-                  self.coredata.builtins, self.coredata.compiler_options]:
-            try:
-                return d[optname]
-            except KeyError:
-                pass
-
-        raw_optname = optname
-        if self.is_subproject():
-            optname = self.subproject + ':' + optname
-
-        try:
-            opt = self.coredata.user_options[optname]
-            if opt.yielding and ':' in optname and raw_optname in self.coredata.user_options:
-                popt = self.coredata.user_options[raw_optname]
-                if type(opt) is type(popt):
-                    opt = popt
-                else:
-                    # Get class name, then option type as a string
-                    opt_type = opt.__class__.__name__[4:][:-6].lower()
-                    popt_type = popt.__class__.__name__[4:][:-6].lower()
-                    # This is not a hard error to avoid dependency hell, the workaround
-                    # when this happens is to simply set the subproject's option directly.
-                    mlog.warning('Option {0!r} of type {1!r} in subproject {2!r} cannot yield '
-                                 'to parent option of type {3!r}, ignoring parent value. '
-                                 'Use -D{2}:{0}=value to set the value for this option manually'
-                                 '.'.format(raw_optname, opt_type, self.subproject, popt_type))
-            return opt
-        except KeyError:
-            pass
-
-        raise InterpreterException('Tried to access unknown option "%s".' % optname)
-
     @stringArgs
     @noKwargs
     def func_get_option(self, nodes, args, kwargs):
@@ -2360,7 +2324,7 @@ external dependencies (including libraries) must go to "dependencies".''')
             raise InterpreterException('Having a colon in option name is forbidden, '
                                        'projects are not allowed to directly access '
                                        'options of other subprojects.')
-        opt = self.get_option_internal(optname)
+        opt = self.coredata.get_option(optname, self.subproject)
         if isinstance(opt, coredata.UserFeatureOption):
             return FeatureOptionHolder(self.environment, opt)
         elif isinstance(opt, coredata.UserOption):
