@@ -345,7 +345,7 @@ class QtBaseDependency(ExternalDependency):
         self.bindir = self.get_qmake_host_bins(qvars)
         self.is_found = True
 
-        is_debug = self.env.coredata.get_builtin_option('buildtype') == 'debug'
+        is_debug = self.env.coredata.get_option_value('buildtype') == 'debug'
         modules_lib_suffix = self._get_modules_lib_suffix(is_debug)
 
         for module in mods:

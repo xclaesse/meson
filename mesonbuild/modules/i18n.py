@@ -150,7 +150,7 @@ class I18nModule(ExtensionModule):
             script = state.environment.get_build_command()
             args = ['--internal', 'gettext', 'install',
                     '--subdir=' + state.subdir,
-                    '--localedir=' + state.environment.coredata.get_builtin_option('localedir'),
+                    '--localedir=' + state.environment.coredata.get_option_value('localedir'),
                     pkg_arg]
             if lang_arg:
                 args.append(lang_arg)

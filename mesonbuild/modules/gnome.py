@@ -217,7 +217,7 @@ class GnomeModule(ExtensionModule):
         if install_header:
             h_kwargs['install'] = install_header
             h_kwargs['install_dir'] = kwargs.get('install_dir',
-                                                 state.environment.coredata.get_builtin_option('includedir'))
+                                                 state.environment.coredata.get_option_value('includedir'))
         target_h = GResourceHeaderTarget(args[0] + '_h', state.subdir, state.subproject, h_kwargs)
         rv = [target_c, target_h]
         return ModuleReturnValue(rv, rv)
@@ -1128,7 +1128,7 @@ This will become a hard error in the future.''')
 
         targets = []
         install_header = kwargs.get('install_header', False)
-        install_dir = kwargs.get('install_dir', state.environment.coredata.get_builtin_option('includedir'))
+        install_dir = kwargs.get('install_dir', state.environment.coredata.get_option_value('includedir'))
 
         output = namebase + '.c'
         # Added in https://gitlab.gnome.org/GNOME/glib/commit/e4d68c7b3e8b01ab1a4231bf6da21d045cb5a816 (2.55.2)
@@ -1285,7 +1285,7 @@ This will become a hard error in the future.''')
             custom_kwargs['install'] = install_header
             if 'install_dir' not in custom_kwargs:
                 custom_kwargs['install_dir'] = \
-                    state.environment.coredata.get_builtin_option('includedir')
+                    state.environment.coredata.get_option_value('includedir')
             h_target = self._make_mkenum_custom_target(state, h_sources,
                                                        h_output, h_cmd,
                                                        custom_kwargs)
@@ -1314,7 +1314,7 @@ This will become a hard error in the future.''')
             custom_kwargs['install'] = install_header
             if 'install_dir' not in custom_kwargs:
                 custom_kwargs['install_dir'] = \
-                    state.environment.coredata.get_builtin_option('includedir')
+                    state.environment.coredata.get_option_value('includedir')
             target = self._make_mkenum_custom_target(state, sources, basename,
                                                      generic_cmd, custom_kwargs)
             return ModuleReturnValue(target, [target])
@@ -1646,7 +1646,7 @@ G_END_DECLS'''
             'depends': vapi_depends,
         }
         install_dir = kwargs.get('install_dir',
-                                 os.path.join(state.environment.coredata.get_builtin_option('datadir'),
+                                 os.path.join(state.environment.coredata.get_option_value('datadir'),
                                               'vala', 'vapi'))
         if kwargs.get('install'):
             custom_kwargs['install'] = kwargs['install']

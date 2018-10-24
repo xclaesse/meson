@@ -282,7 +282,7 @@ class PythonInstallation(ExternalProgramHolder, InterpreterObject):
         InterpreterObject.__init__(self)
         ExternalProgramHolder.__init__(self, python)
         self.interpreter = interpreter
-        prefix = self.interpreter.environment.coredata.get_builtin_option('prefix')
+        prefix = self.interpreter.environment.coredata.get_option_value('prefix')
         self.variables = info['variables']
         self.paths = info['paths']
         install_paths = info['install_paths']

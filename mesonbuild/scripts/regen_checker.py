@@ -47,7 +47,7 @@ def run(args):
         regeninfo = pickle.load(f)
     with open(coredata, 'rb') as f:
         coredata = pickle.load(f)
-    backend = coredata.get_builtin_option('backend')
+    backend = coredata.get_option_value('backend')
     regen_timestamp = os.stat(dumpfile).st_mtime
     if need_regen(regeninfo, regen_timestamp):
         regen(regeninfo, coredata.meson_command, backend)

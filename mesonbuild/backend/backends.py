@@ -145,7 +145,7 @@ class Backend:
         raise AssertionError('BUG: Tried to link to {!r} which is not linkable'.format(target))
 
     def get_target_dir(self, target):
-        if self.environment.coredata.get_builtin_option('layout') == 'mirror':
+        if self.environment.coredata.get_option_value('layout') == 'mirror':
             dirname = target.get_subdir()
         else:
             dirname = 'meson-out'
@@ -350,7 +350,7 @@ class Backend:
         return paths
 
     def determine_rpath_dirs(self, target):
-        if self.environment.coredata.get_builtin_option('layout') == 'mirror':
+        if self.environment.coredata.get_option_value('layout') == 'mirror':
             result = target.get_link_dep_subdirs()
         else:
             result = OrderedSet()
@@ -916,7 +916,7 @@ class Backend:
                         self.environment.get_build_dir(),
                         self.environment.get_prefix(),
                         strip_bin,
-                        self.environment.coredata.get_builtin_option('install_umask'),
+                        self.environment.coredata.get_option_value('install_umask'),
                         self.environment.get_build_command() + ['introspect'])
         self.generate_depmf_install(d)
         self.generate_target_install(d)

@@ -160,7 +160,7 @@ class Vs2010Backend(backends.Backend):
             self.platform = 'ARM'
         else:
             raise MesonException('Unsupported Visual Studio platform: ' + target_machine)
-        self.buildtype = self.environment.coredata.get_builtin_option('buildtype')
+        self.buildtype = self.environment.coredata.get_option_value('buildtype')
         sln_filename = os.path.join(self.environment.get_build_dir(), self.build.project_name + '.sln')
         projlist = self.generate_projects()
         self.gen_testproj('RUN_TESTS', os.path.join(self.environment.get_build_dir(), 'RUN_TESTS.vcxproj'))
@@ -259,7 +259,7 @@ class Vs2010Backend(backends.Backend):
             prj_templ = 'Project("{%s}") = "%s", "%s", "{%s}"\n'
             for prj in projlist:
                 coredata = self.environment.coredata
-                if coredata.get_builtin_option('layout') == 'mirror':
+                if coredata.get_option_value('layout') == 'mirror':
                     self.generate_solution_dirs(ofile, prj[1].parents)
                 target = self.build.targets[prj[0]]
                 lang = 'default'
@@ -1289,9 +1289,9 @@ if %%errorlevel%% neq 0 goto :VCEnd'''
         ET.SubElement(postbuild, 'Message')
         # FIXME: No benchmarks?
         test_command = self.environment.get_build_command() + ['test', '--no-rebuild']
-        if not self.environment.coredata.get_builtin_option('stdsplit'):
+        if not self.environment.coredata.get_option_value('stdsplit'):
             test_command += ['--no-stdsplit']
-        if self.environment.coredata.get_builtin_option('errorlogs'):
+        if self.environment.coredata.get_option_value('errorlogs'):
             test_command += ['--print-errorlogs']
         cmd_templ = '''setlocal
 "%s"

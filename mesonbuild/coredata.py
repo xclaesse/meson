@@ -335,14 +335,6 @@ class CoreData:
                     'Default project to execute in Visual Studio',
                     '')
 
-    def get_builtin_option(self, optname):
-        if optname in self.builtins:
-            v = self.builtins[optname]
-            if optname == 'wrap_mode':
-                return WrapMode.from_string(v.value)
-            return v.value
-        raise RuntimeError('Tried to get unknown builtin option %s.' % optname)
-
     def set_builtin_option(self, optname, value):
         if optname == 'prefix':
             value = self.sanitize_prefix(value)
@@ -496,11 +488,14 @@ class CoreData:
 
         raise InterpreterException('Tried to access unknown option "%s".' % optname)
 
-    def get_option_value(self, optname, subproject, overrides={}):
+    def get_option_value(self, optname, subproject=None, overrides={}):
         opt = self.get_option(optname, subproject)
+        value = opt.value
         if optname in overrides:
-            return opt.validate_value(overrides[optname])
-        return opt.value
+            value = opt.validate_value(overrides[optname])
+        if optname == 'wrap_mode':
+            value = WrapMode.from_string(value)
+        return value
 
 class OptionsProxy:
     def __init__(self, coredata, subproject, overrides):

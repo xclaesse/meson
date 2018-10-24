@@ -977,25 +977,25 @@ This is probably wrong, it should always point to the native compiler.''' % evar
         return self.object_suffix
 
     def get_prefix(self):
-        return self.coredata.get_builtin_option('prefix')
+        return self.coredata.get_option_value('prefix')
 
     def get_libdir(self):
-        return self.coredata.get_builtin_option('libdir')
+        return self.coredata.get_option_value('libdir')
 
     def get_libexecdir(self):
-        return self.coredata.get_builtin_option('libexecdir')
+        return self.coredata.get_option_value('libexecdir')
 
     def get_bindir(self):
-        return self.coredata.get_builtin_option('bindir')
+        return self.coredata.get_option_value('bindir')
 
     def get_includedir(self):
-        return self.coredata.get_builtin_option('includedir')
+        return self.coredata.get_option_value('includedir')
 
     def get_mandir(self):
-        return self.coredata.get_builtin_option('mandir')
+        return self.coredata.get_option_value('mandir')
 
     def get_datadir(self):
-        return self.coredata.get_builtin_option('datadir')
+        return self.coredata.get_option_value('datadir')
 
     def get_compiler_system_dirs(self):
         for comp in self.coredata.compilers.values():

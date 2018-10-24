@@ -236,10 +236,10 @@ class PkgConfigModule(ExtensionModule):
         coredata = state.environment.get_coredata()
         outdir = state.environment.scratch_dir
         fname = os.path.join(outdir, pcfile)
-        prefix = PurePath(coredata.get_builtin_option('prefix'))
+        prefix = PurePath(coredata.get_option_value('prefix'))
         # These always return paths relative to prefix
-        libdir = PurePath(coredata.get_builtin_option('libdir'))
-        incdir = PurePath(coredata.get_builtin_option('includedir'))
+        libdir = PurePath(coredata.get_option_value('libdir'))
+        incdir = PurePath(coredata.get_option_value('includedir'))
         with open(fname, 'w') as ofile:
             ofile.write('prefix={}\n'.format(self._escape(prefix)))
             ofile.write('libdir={}\n'.format(self._escape('${prefix}' / libdir)))
@@ -394,7 +394,7 @@ class PkgConfigModule(ExtensionModule):
         pcfile = filebase + '.pc'
         pkgroot = kwargs.get('install_dir', default_install_dir)
         if pkgroot is None:
-            pkgroot = os.path.join(state.environment.coredata.get_builtin_option('libdir'), 'pkgconfig')
+            pkgroot = os.path.join(state.environment.coredata.get_option_value('libdir'), 'pkgconfig')
         if not isinstance(pkgroot, str):
             raise mesonlib.MesonException('Install_dir must be a string.')
         self.generate_pkgconfig_file(state, deps, subdirs, name, description, url,

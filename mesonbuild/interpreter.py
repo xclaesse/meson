@@ -63,7 +63,7 @@ class FeatureOptionHolder(InterpreterObject, ObjectHolder):
         InterpreterObject.__init__(self)
         ObjectHolder.__init__(self, option)
         if option.is_auto():
-            self.held_object = env.coredata.builtins['auto_features']
+            self.held_object = env.coredata.get_option('auto_features')
         self.name = option.name
         self.methods.update({'enabled': self.enabled_method,
                              'disabled': self.disabled_method,
@@ -1719,7 +1719,7 @@ class MesonMain(InterpreterObject):
     @noPosargs
     @permittedKwargs({})
     def is_unity_method(self, args, kwargs):
-        optval = self.interpreter.environment.coredata.get_builtin_option('unity')
+        optval = self.interpreter.environment.coredata.get_option_value('unity')
         if optval == 'on' or (optval == 'subprojects' and self.interpreter.is_subproject()):
             return True
         return False
@@ -2260,7 +2260,7 @@ external dependencies (including libraries) must go to "dependencies".''')
 
             return subproject
         subproject_dir_abs = os.path.join(self.environment.get_source_dir(), self.subproject_dir)
-        r = wrap.Resolver(subproject_dir_abs, self.coredata.get_builtin_option('wrap_mode'))
+        r = wrap.Resolver(subproject_dir_abs, self.coredata.get_option_value('wrap_mode'))
         try:
             resolved = r.resolve(dirname)
         except wrap.WrapException as e:
@@ -2379,7 +2379,7 @@ external dependencies (including libraries) must go to "dependencies".''')
         # The backend is already set when parsing subprojects
         if self.backend is not None:
             return
-        backend = self.coredata.get_builtin_option('backend')
+        backend = self.coredata.get_option_value('backend')
         if backend == 'ninja':
             from .backend import ninjabackend
             self.backend = ninjabackend.NinjaBackend(self.build)
@@ -2914,7 +2914,7 @@ external dependencies (including libraries) must go to "dependencies".''')
             dep = NotFoundDependency(self.environment)
 
             # Unless a fallback exists and is forced ...
-            if self.coredata.get_builtin_option('wrap_mode') == WrapMode.forcefallback and 'fallback' in kwargs:
+            if self.coredata.get_option_value('wrap_mode') == WrapMode.forcefallback and 'fallback' in kwargs:
                 pass
             # ... search for it outside the project
             elif name != '':
@@ -2976,12 +2976,12 @@ external dependencies (including libraries) must go to "dependencies".''')
 
     def dependency_fallback(self, name, kwargs):
         display_name = name if name else '(anonymous)'
-        if self.coredata.get_builtin_option('wrap_mode') in (WrapMode.nofallback, WrapMode.nodownload):
+        if self.coredata.get_option_value('wrap_mode') in (WrapMode.nofallback, WrapMode.nodownload):
             mlog.log('Not looking for a fallback subproject for the dependency',
                      mlog.bold(display_name), 'because:\nUse of fallback'
                      'dependencies is disabled.')
             return None
-        elif self.coredata.get_builtin_option('wrap_mode') == WrapMode.forcefallback:
+        elif self.coredata.get_option_value('wrap_mode') == WrapMode.forcefallback:
             mlog.log('Looking for a fallback subproject for the dependency',
                      mlog.bold(display_name), 'because:\nUse of fallback dependencies is forced.')
         else:
@@ -3892,7 +3892,7 @@ Try setting b_lundef to false instead.'''.format(self.coredata.base_options['b_s
         return BothLibrariesHolder(shared_holder, static_holder, self)
 
     def build_library(self, node, args, kwargs):
-        default_library = self.coredata.get_builtin_option('default_library')
+        default_library = self.coredata.get_option_value('default_library')
         if default_library == 'shared':
             return self.build_target(node, args, kwargs, SharedLibraryHolder)
         elif default_library == 'static':

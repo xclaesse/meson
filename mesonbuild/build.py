@@ -383,7 +383,7 @@ class BuildTarget(Target):
     def __init__(self, name, subdir, subproject, is_cross, sources, objects, environment, kwargs):
         super().__init__(name, subdir, subproject, True)
         self.is_cross = is_cross
-        unity_opt = environment.coredata.get_builtin_option('unity')
+        unity_opt = environment.coredata.get_option_value('unity')
         self.is_unity = unity_opt == 'on' or (unity_opt == 'subprojects' and subproject != '')
         self.environment = environment
         self.sources = []
