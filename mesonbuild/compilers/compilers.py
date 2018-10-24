@@ -400,32 +400,32 @@ def sanitizer_link_args(value):
     args = ['-fsanitize=' + value]
     return args
 
-def option_enabled(boptions, options, option):
+def option_enabled(boptions, target, option):
     try:
         if option not in boptions:
             return False
-        return options[option].value
+        return target.get_option_value(option)
     except KeyError:
         return False
 
-def get_base_compile_args(options, compiler):
+def get_base_compile_args(target, compiler):
     args = []
     # FIXME, gcc/clang specific.
     try:
-        if options['b_lto'].value:
+        if target.get_option_value('b_lto'):
             args.append('-flto')
     except KeyError:
         pass
     try:
-        args += compiler.get_colorout_args(options['b_colorout'].value)
+        args += compiler.get_colorout_args(target.get_option_value('b_colorout'))
     except KeyError:
         pass
     try:
-        args += sanitizer_compile_args(options['b_sanitize'].value)
+        args += sanitizer_compile_args(target.get_option_value('b_sanitize'))
     except KeyError:
         pass
     try:
-        pgo_val = options['b_pgo'].value
+        pgo_val = target.get_option_value('b_pgo')
         if pgo_val == 'generate':
             args.append('-fprofile-generate')
         elif pgo_val == 'use':
@@ -433,23 +433,23 @@ def get_base_compile_args(options, compiler):
     except KeyError:
         pass
     try:
-        if options['b_coverage'].value:
+        if target.get_option_value('b_coverage'):
             args += compiler.get_coverage_args()
     except KeyError:
         pass
     try:
-        if (options['b_ndebug'].value == 'true' or
-                (options['b_ndebug'].value == 'if-release' and
-                 options['buildtype'].value == 'release')):
+        if (target.get_option_value('b_ndebug') == 'true' or
+                (target.get_option_value('b_ndebug') == 'if-release' and
+                 target.get_option_value('buildtype') == 'release')):
             args += ['-DNDEBUG']
     except KeyError:
         pass
     # This does not need a try...except
-    if option_enabled(compiler.base_options, options, 'b_bitcode'):
+    if option_enabled(compiler.base_options, target, 'b_bitcode'):
         args.append('-fembed-bitcode')
     try:
-        crt_val = options['b_vscrt'].value
-        buildtype = options['buildtype'].value
+        crt_val = target.get_option_value('b_vscrt')
+        buildtype = target.get_option_value('buildtype')
         try:
             args += compiler.get_crt_compile_args(crt_val, buildtype)
         except AttributeError:
@@ -458,20 +458,20 @@ def get_base_compile_args(options, compiler):
         pass
     return args
 
-def get_base_link_args(options, linker, is_shared_module):
+def get_base_link_args(target, linker, is_shared_module):
     args = []
     # FIXME, gcc/clang specific.
     try:
-        if options['b_lto'].value:
+        if target.get_option_value('b_lto'):
             args.append('-flto')
     except KeyError:
         pass
     try:
-        args += sanitizer_link_args(options['b_sanitize'].value)
+        args += sanitizer_link_args(target.get_option_value('b_sanitize'))
     except KeyError:
         pass
     try:
-        pgo_val = options['b_pgo'].value
+        pgo_val = target.get_option_value('b_pgo')
         if pgo_val == 'generate':
             args.append('-fprofile-generate')
         elif pgo_val == 'use':
@@ -479,15 +479,15 @@ def get_base_link_args(options, linker, is_shared_module):
     except KeyError:
         pass
     try:
-        if options['b_coverage'].value:
+        if target.get_option_value('b_coverage'):
             args += linker.get_coverage_link_args()
     except KeyError:
         pass
     # These do not need a try...except
-    if not is_shared_module and option_enabled(linker.base_options, options, 'b_lundef'):
+    if not is_shared_module and option_enabled(linker.base_options, target, 'b_lundef'):
         args.append('-Wl,--no-undefined')
-    as_needed = option_enabled(linker.base_options, options, 'b_asneeded')
-    bitcode = option_enabled(linker.base_options, options, 'b_bitcode')
+    as_needed = option_enabled(linker.base_options, target, 'b_asneeded')
+    bitcode = option_enabled(linker.base_options, target, 'b_bitcode')
     # Shared modules cannot be built with bitcode_bundle because
     # -bitcode_bundle is incompatible with -undefined and -bundle
     if bitcode and not is_shared_module:
@@ -496,8 +496,8 @@ def get_base_link_args(options, linker, is_shared_module):
         # -Wl,-dead_strip_dylibs is incompatible with bitcode
         args.append(linker.get_asneeded_args())
     try:
-        crt_val = options['b_vscrt'].value
-        buildtype = options['buildtype'].value
+        crt_val = target.get_option_value('b_vscrt')
+        buildtype = target.get_option_value('buildtype')
         try:
             args += linker.get_crt_link_args(crt_val, buildtype)
         except AttributeError:

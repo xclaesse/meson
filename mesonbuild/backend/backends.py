@@ -151,11 +151,6 @@ class Backend:
         return OptionOverrideProxy(target.option_overrides,
                                    self.environment.coredata.builtins)
 
-    def get_base_options_for_target(self, target):
-        return OptionOverrideProxy(target.option_overrides,
-                                   self.environment.coredata.builtins,
-                                   self.environment.coredata.base_options)
-
     def get_option_for_target(self, option_name, target):
         return target.get_option_value(option_name)
 
