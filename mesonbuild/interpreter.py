@@ -2386,7 +2386,7 @@ external dependencies (including libraries) must go to "dependencies".''')
         elif backend == 'vs':
             from .backend import vs2010backend
             self.backend = vs2010backend.autodetect_vs_version(self.build)
-            self.coredata.set_builtin_option('backend', self.backend.name)
+            self.coredata.set_options({'backend': self.backend.name})
             mlog.log('Auto detected Visual Studio backend:', mlog.bold(self.backend.name))
         elif backend == 'vs2010':
             from .backend import vs2010backend

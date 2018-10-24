@@ -335,22 +335,6 @@ class CoreData:
                     'Default project to execute in Visual Studio',
                     '')
 
-    def set_builtin_option(self, optname, value):
-        if optname == 'prefix':
-            value = self.sanitize_prefix(value)
-        elif optname in self.builtins:
-            prefix = self.builtins['prefix'].value
-            value = self.sanitize_dir_option_value(prefix, optname, value)
-        else:
-            raise RuntimeError('Tried to set unknown builtin option %s.' % optname)
-        self.builtins[optname].set_value(value)
-
-        # Make sure that buildtype matches other settings.
-        if optname == 'buildtype':
-            self.set_others_from_buildtype(value)
-        else:
-            self.set_buildtype_from_others()
-
     def set_others_from_buildtype(self, value):
         if value == 'plain':
             opt = '0'
@@ -430,7 +414,9 @@ class CoreData:
             if k == 'prefix':
                 pass
             elif k in self.builtins:
-                self.set_builtin_option(k, v)
+                v = self.sanitize_dir_option_value(prefix, k, v)
+                tgt = self.builtins[k]
+                tgt.set_value(v)
             elif k in self.backend_options:
                 tgt = self.backend_options[k]
                 tgt.set_value(v)
@@ -445,6 +431,12 @@ class CoreData:
                 tgt.set_value(v)
             else:
                 unknown_options.append(k)
+
+            # Make sure that buildtype matches other settings.
+            if k == 'buildtype':
+                self.set_others_from_buildtype(v)
+            elif k in ['optimization', 'debug']:
+                self.set_buildtype_from_others()
 
         if unknown_options:
             unknown_options = ', '.join(sorted(unknown_options))
