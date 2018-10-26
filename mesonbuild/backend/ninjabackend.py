@@ -2401,7 +2401,7 @@ rule FORTRAN_DEP_HACK%s
             if not target.is_cross:
                 # Link args added from the env: LDFLAGS. We want these to
                 # override all the defaults but not the per-target link args.
-                commands += self.environment.coredata.get_external_link_args(linker.get_language())
+                commands += target.get_option_value(linker.get_language() + '_link_args')
 
         # Now we will add libraries and library paths from various sources
 

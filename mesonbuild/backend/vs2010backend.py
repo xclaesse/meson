@@ -1005,7 +1005,7 @@ class Vs2010Backend(backends.Backend):
             if not target.is_cross:
                 # Link args added from the env: LDFLAGS. We want these to
                 # override all the defaults but not the per-target link args.
-                extra_link_args += self.environment.coredata.get_external_link_args(compiler.get_language())
+                extra_link_args += target.get_option_value(compiler.get_language() + '_link_args')
             # Only non-static built targets need link args and link dependencies
             extra_link_args += target.link_args
             # External deps must be last because target link libraries may depend on them.

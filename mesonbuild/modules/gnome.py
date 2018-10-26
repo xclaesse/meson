@@ -523,7 +523,7 @@ class GnomeModule(ExtensionModule):
             if state.environment.is_cross_build():
                 link_args = state.environment.cross_info.config["properties"].get(lang + '_link_args', "")
             else:
-                link_args = state.environment.coredata.get_external_link_args(lang)
+                link_args = state.environment.coredata.get_option_value(lang + '_link_args', state.subproject)
 
             for link_arg in link_args:
                 if link_arg.startswith('-L'):
@@ -701,7 +701,7 @@ class GnomeModule(ExtensionModule):
             if state.environment.is_cross_build():
                 ret += state.environment.cross_info.config["properties"].get(lang + '_args', "")
             else:
-                ret += state.environment.coredata.get_external_args(lang)
+                ret += state.environment.coredata.get_option_value(lang + '_args', state.subproject)
         return ret
 
     @staticmethod
@@ -1026,8 +1026,8 @@ This will become a hard error in the future.''')
             ldflags.update(state.environment.cross_info.config["properties"].get('c_link_args', ""))
             compiler = state.environment.coredata.cross_compilers.get('c')
         else:
-            cflags.update(state.environment.coredata.get_external_args('c'))
-            ldflags.update(state.environment.coredata.get_external_link_args('c'))
+            cflags.update(state.environment.coredata.get_option_value('c_args', state.subproject))
+            ldflags.update(state.environment.coredata.get_option_value('c_link_args', state.subproject))
             compiler = state.environment.coredata.compilers.get('c')
 
         compiler_flags = self._get_langs_compilers_flags(state, [('c', compiler)])

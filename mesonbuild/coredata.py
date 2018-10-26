@@ -381,12 +381,6 @@ class CoreData:
                 return opt.validate_value(override_value)
         raise MesonException('Tried to validate unknown option %s.' % option_name)
 
-    def get_external_args(self, lang):
-        return self.compiler_options[lang + '_args'].value
-
-    def get_external_link_args(self, lang):
-        return self.compiler_options[lang + '_link_args'].value
-
     def get_external_preprocess_args(self, lang):
         return self.external_preprocess_args[lang]
 

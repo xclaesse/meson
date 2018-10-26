@@ -502,7 +502,7 @@ class Backend:
         if not target.is_cross:
             # Compile args added from the env: CFLAGS/CXXFLAGS, etc. We want these
             # to override all the defaults, but not the per-target compile args.
-            commands += self.environment.coredata.get_external_args(compiler.get_language())
+            commands += target.get_option_value(compiler.get_language() + '_args')
         # Always set -fPIC for shared libraries
         if isinstance(target, build.SharedLibrary):
             commands += compiler.get_pic_args()
