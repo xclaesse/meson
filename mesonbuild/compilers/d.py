@@ -293,10 +293,10 @@ class DCompiler(Compiler):
 
         if mode == 'compile':
             # Add DFLAGS from the env
-            args += env.coredata.get_option_value(self.language + '_args', env.subproject)
+            args += env.coredata.get_option_value(self.language + '_args')
         elif mode == 'link':
             # Add LDFLAGS from the env
-            args += env.coredata.get_option_value(self.language + '_link_args', env.subproject)
+            args += env.coredata.get_option_value(self.language + '_link_args')
         # extra_args must override all other arguments, so we add them last
         args += extra_args
         return args

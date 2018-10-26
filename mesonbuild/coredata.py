@@ -437,7 +437,7 @@ class CoreData:
             sub = 'In subproject {}: '.format(subproject) if subproject else ''
             mlog.warning('{}Unknown options: "{}"'.format(sub, unknown_options))
 
-    def get_option(self, optname, subproject):
+    def get_option(self, optname, subproject=None):
         # Import it here to avoid import cycle
         from .compilers import base_options
         # Some base options are not defined in some environments, return the
@@ -484,7 +484,7 @@ class CoreData:
         return value
 
 class OptionsProxy:
-    def __init__(self, coredata, subproject, overrides):
+    def __init__(self, coredata, subproject, overrides={}):
         self.coredata = coredata
         self.subproject = subproject
         self.overrides = overrides

@@ -422,10 +422,10 @@ class CCompiler(Compiler):
                 args += env.coredata.get_external_preprocess_args(self.language)
             elif mode == 'compile':
                 # Add CFLAGS/CXXFLAGS/OBJCFLAGS/OBJCXXFLAGS from the env
-                args += env.coredata.get_option_value(self.language + '_args', env.subproject)
+                args += env.coredata.get_option_value(self.language + '_args')
             elif mode == 'link':
                 # Add LDFLAGS from the env
-                args += env.coredata.get_option_value(self.language + '_link_args', env.subproject)
+                args += env.coredata.get_option_value(self.language + '_link_args')
         args += self.get_compiler_check_args()
         # extra_args must override all other arguments, so we add them last
         args += extra_args
