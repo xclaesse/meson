@@ -17,9 +17,9 @@ import contextlib
 import urllib.request, os, hashlib, shutil, tempfile, stat
 import subprocess
 import sys
-import configparser
+import configparser, ast
 from . import WrapMode
-from ..mesonlib import MesonException
+from ..mesonlib import MesonException, Popen_safe
 
 try:
     import ssl
@@ -103,6 +103,15 @@ class PackageDefinition:
     def has_patch(self):
         return 'patch_url' in self.values
 
+    def get_patch_files(self):
+        try:
+            values = dict(self.config['patch-files'])
+        except KeyError:
+            return 0, []
+        strip = values.get('strip', 1)
+        patches = ast.literal_eval(values.get('patches', '[]'))
+        return strip, patches
+
 class Resolver:
     def __init__(self, subdir_root, wrap_mode=WrapMode.default):
         self.wrap_mode = wrap_mode
@@ -150,6 +159,10 @@ class Resolver:
                     self.get_svn()
                 else:
                     raise WrapException('Unknown wrap type {!r}'.format(self.wrap.type))
+
+            strip, files = self.wrap.get_patch_files()
+            for f in files:
+                self.apply_patch_file(f, strip)
 
         # A meson.build file is required in the directory
         if not os.path.exists(meson_file):
@@ -332,6 +345,13 @@ class Resolver:
             with tempfile.TemporaryDirectory() as workdir:
                 shutil.unpack_archive(path, workdir)
                 self.copy_tree(workdir, self.subdir_root)
+
+    def apply_patch_file(self, filename, strip):
+        mlog.log('Applying patch ' + filename)
+        full_path = os.path.join(self.subdir_root, filename)
+        p, o, e = Popen_safe(['patch', '-p' + strip, '-f', '-i', full_path], cwd=self.dirname)
+        if p.returncode != 0:
+            raise WrapException('Failed to apply patch: ' + e)
 
     def copy_tree(self, root_src_dir, root_dst_dir):
         """

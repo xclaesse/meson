@@ -9,3 +9,10 @@ lead_directory_missing = true
 patch_url = https://something.invalid/patch
 patch_filename = foo-1.0-patch.tar.xz
 patch_hash = 8f2e286a4b190228d4e0c25ddc91195449cfb5e5c52006355838964b244037da
+
+[patch-files]
+strip = 1
+patches = ['0001-Change-return-value-to-43.patch',
+           '0002-Change-return-value-to-44.patch',
+           '0001-Change-foo-to-executable.patch',
+          ]
