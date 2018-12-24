@@ -28,7 +28,7 @@ from .interpreterbase import InterpreterBase
 from .interpreterbase import check_stringlist, flatten, noPosargs, noKwargs, stringArgs, permittedKwargs, noArgsFlattening
 from .interpreterbase import InterpreterException, InvalidArguments, InvalidCode, SubdirDoneRequest
 from .interpreterbase import InterpreterObject, MutableInterpreterObject, Disabler, disablerIfNotFound
-from .interpreterbase import FeatureNew, FeatureDeprecated, FeatureNewKwargs
+from .interpreterbase import FeatureNew, FeatureDeprecated, FeatureNewKwargs, FeatureDeprecatedKwargs
 from .interpreterbase import ObjectHolder
 from .modules import ModuleReturnValue
 
@@ -940,6 +940,7 @@ class CompilerHolder(InterpreterObject):
                              'version': self.version_method,
                              'cmd_array': self.cmd_array_method,
                              'find_library': self.find_library_method,
+                             'find_library_fallback': self.find_library_fallback_method,
                              'has_argument': self.has_argument_method,
                              'has_function_attribute': self.has_func_attribute_method,
                              'get_supported_function_attributes': self.get_supported_function_attributes_method,
@@ -1486,6 +1487,11 @@ class CompilerHolder(InterpreterObject):
                                            self.compiler.language)
         return ExternalLibraryHolder(lib, self.subproject)
 
+    @FeatureNew('compiler.find_library_fallback', '0.50.0')
+    @permittedKwargs(find_library_permitted_kwargs)
+    def find_library_fallback_method(self, args, kwargs):
+        return FindLibraryFallbackHolder(self, args, kwargs)
+
     @permittedKwargs({})
     def has_argument_method(self, args, kwargs):
         args = mesonlib.stringlistify(args)
@@ -1966,6 +1972,34 @@ permitted_kwargs = {'add_global_arguments': {'language', 'native'},
                     }
 
 
+class FallbackHolder(InterpreterObject):
+    def __init__(self, args, kwargs):
+        InterpreterObject.__init__(self)
+        self.args = args
+        self.kwargs = kwargs
+
+class FindLibraryFallbackHolder(FallbackHolder):
+    def __init__(self, compiler, args, kwargs):
+        FallbackHolder.__init__(self, args, kwargs)
+        self.compiler = compiler
+
+    def execute(self, display_name, required):
+        self.kwargs['required'] = required
+        return self.compiler.find_library_method(self.args, self.kwargs)
+
+class SubprojectFallbackHolder(FallbackHolder):
+    def __init__(self, interpreter, args, kwargs):
+        FallbackHolder.__init__(self, args, kwargs)
+        self.interpreter = interpreter
+
+    def execute(self, display_name, required):
+        self.kwargs['required'] = required
+        varname = self.kwargs.pop('variable')
+        sp = self.interpreter.func_subproject(None, self.args, self.kwargs)
+        dep = self.interpreter.get_subproject_dep(display_name, self.args[0], varname, self.kwargs)
+        return dep
+
+
 class Interpreter(InterpreterBase):
 
     def __init__(self, build, backend=None, subproject='', subdir='', subproject_dir='subprojects',
@@ -2081,6 +2115,7 @@ class Interpreter(InterpreterBase):
                            'subdir': self.func_subdir,
                            'subdir_done': self.func_subdir_done,
                            'subproject': self.func_subproject,
+                           'subproject_fallback': self.func_subproject_fallback,
                            'shared_library': self.func_shared_lib,
                            'shared_module': self.func_shared_module,
                            'static_library': self.func_static_lib,
@@ -2343,6 +2378,12 @@ external dependencies (including libraries) must go to "dependencies".''')
             raise InterpreterException('Subproject takes exactly one argument')
         dirname = args[0]
         return self.do_subproject(dirname, kwargs)
+
+    @FeatureNew('subproject', '0.50.0')
+    @permittedKwargs(permitted_kwargs['subproject'] | set({'variable'}))
+    @stringArgs
+    def func_subproject_fallback(self, nodes, args, kwargs):
+        return SubprojectFallbackHolder(self, args, kwargs)
 
     def disabled_subproject(self, dirname):
         self.subprojects[dirname] = SubprojectHolder(None, self.subproject_dir, dirname)
@@ -2857,7 +2898,7 @@ external dependencies (including libraries) must go to "dependencies".''')
                           'Look here for example: http://mesonbuild.com/howtox.html#add-math-library-lm-portably\n'
                           )
 
-    def _find_cached_dep(self, name, kwargs):
+    def dependency_cache_identifier(self, name, kwargs):
         # Check if we want this as a cross-dep or a native-dep
         # FIXME: Not all dependencies support such a distinction right now,
         # and we repeat this check inside dependencies that do. We need to
@@ -2868,7 +2909,10 @@ external dependencies (including libraries) must go to "dependencies".''')
         else:
             want_cross = is_cross
 
-        identifier = dependencies.get_dep_identifier(name, kwargs, want_cross)
+        return dependencies.get_dep_identifier(name, kwargs, want_cross)
+
+    def _find_cached_dep(self, name, kwargs):
+        identifier = self.dependency_cache_identifier(name, kwargs)
         cached_dep = self.coredata.deps.get(identifier)
         if not cached_dep:
             cached_dep = self.build.deps.get(identifier)
@@ -2954,6 +2998,7 @@ external dependencies (including libraries) must go to "dependencies".''')
         elif name == 'openmp':
             FeatureNew('OpenMP Dependency', '0.46.0').use(self.subproject)
 
+    @FeatureDeprecatedKwargs('dependency', '0.50.0', ['fallback', 'default_options'])
     @FeatureNewKwargs('dependency', '0.49.0', ['disabler'])
     @FeatureNewKwargs('dependency', '0.40.0', ['method'])
     @FeatureNewKwargs('dependency', '0.38.0', ['default_options'])
@@ -2961,14 +3006,25 @@ external dependencies (including libraries) must go to "dependencies".''')
     @disablerIfNotFound
     @permittedKwargs(permitted_kwargs['dependency'])
     def func_dependency(self, node, args, kwargs):
-        self.validate_arguments(args, 1, [str])
+        if len(args) == 0:
+            raise InterpreterException('dependency takes at least one argument')
+        if len(args) > 1:
+            FeatureNew('dependency fallbacks', '0.50.0').use(self.subproject)
+
         name = args[0]
+        if not isinstance(name, str):
+            raise InterpreterException('dependency first argument must be a string')
+
+        for fb in args:
+            if not isinstance(fb, (FallbackHolder, str)):
+                raise InterpreterException('dependency argument must be string or fallback object')
+
         display_name = name if name else '(anonymous)'
         not_found_message = kwargs.get('not_found_message', '')
         if not isinstance(not_found_message, str):
             raise InvalidArguments('The not_found_message must be a string.')
         try:
-            d = self.dependency_impl(name, display_name, kwargs)
+            d = self.dependency_impl(name, display_name, args, kwargs)
         except Exception:
             if not_found_message:
                 self.message_impl(not_found_message)
@@ -2977,19 +3033,61 @@ external dependencies (including libraries) must go to "dependencies".''')
             self.message_impl(not_found_message)
         return d
 
-    def dependency_impl(self, name, display_name, kwargs):
+    def dependency_impl(self, name, display_name, args, kwargs):
         disabled, required, feature = extract_required_kwarg(kwargs, self.subproject)
         if disabled:
             mlog.log('Dependency', mlog.bold(display_name), 'skipped: feature', mlog.bold(feature), 'disabled')
             return self.notfound_dependency()
 
-        has_fallback = 'fallback' in kwargs
-        if 'default_options' in kwargs and not has_fallback:
+        fallbacks = args[:]
+
+        # Convert legacy fallback kwarg to SubprojectFallbackHolder() object.
+        if 'fallback' in kwargs:
+            dirname, varname = self.get_subproject_infos(kwargs)
+            sp_kwargs = {'variable': varname,
+                         'default_options': kwargs.get('default_options', [])
+                         }
+            fallbacks.append(SubprojectFallbackHolder(self, [dirname], sp_kwargs))
+        elif 'default_options' in kwargs:
             mlog.warning('The "default_options" keyworg argument does nothing without a "fallback" keyword argument.')
 
-        # writing just "dependency('')" is an error, because it can only fail
-        if name == '' and required and not has_fallback:
-            raise InvalidArguments('Dependency is both required and not-found')
+        if self.coredata.get_builtin_option('wrap_mode') == WrapMode.forcefallback:
+            # Only keep subproject fallbacks, unless there are none
+            l = [fb for fb in fallbacks if isinstance(fb, SubprojectFallbackHolder)]
+            fallbacks = l if l else fallbacks
+        if self.coredata.get_builtin_option('wrap_mode') == WrapMode.nofallback:
+            # Remove subproject fallbacks
+            fallbacks = [fb for fb in fallbacks if not isinstance(fb, SubprojectFallbackHolder)]
+
+        # Try all fallbacks until one is found.
+        last = len(fallbacks) - 1
+        for i, fb in enumerate(fallbacks):
+            fb_required = required and (i == last)
+            if isinstance(fb, str):
+                dep = self.dependency_string(fb, fb_required, kwargs)
+            else:
+                dep = fb.execute(display_name, fb_required)
+            if dep.found():
+                break
+
+        # Override all string fallbacks to this dep to have consistent results
+        # in subsequent dependency lookups. For example if we first lookup for
+        # 'libxml-2.0' dependency with a fallback to find_library(), any
+        # subsequent call to dependency('libxml-2.0') without the fallback
+        # should still return the library.
+        for fb in fallbacks:
+            if isinstance(fb, str) and fb != '':
+                identifier = self.dependency_cache_identifier(fb, kwargs)
+                self.build.deps[identifier] = dep.held_object
+
+        return dep
+
+    def dependency_string(self, name, required, kwargs):
+        if name == '':
+            if required:
+                # writing just "dependency('')" is an error, because it can only fail
+                raise InvalidArguments('Dependency is both required and not-found')
+            return self.notfound_dependency()
 
         if '<' in name or '>' in name or '=' in name:
             raise InvalidArguments('Characters <, > and = are forbidden in dependency names. To specify'
@@ -2999,38 +3097,18 @@ external dependencies (including libraries) must go to "dependencies".''')
         if cached_dep:
             if required and not cached_dep.found():
                 m = 'Dependency {!r} was already checked and was not found'
-                raise DependencyException(m.format(display_name))
+                raise DependencyException(m.format(name))
             return DependencyHolder(cached_dep, self.subproject)
 
-        dep = self.dependency_cache_miss(name, display_name, has_fallback, required, identifier, kwargs)
-        if name != '':
-            self.build.deps[identifier] = dep.held_object
-        return dep
-
-    def dependency_cache_miss(self, name, display_name, has_fallback, required, identifier, kwargs):
-        # If the dependency has already been configured, possibly by
-        # a higher level project, try to use it first.
-        if has_fallback:
-            dirname, varname = self.get_subproject_infos(kwargs)
-            if dirname in self.subprojects:
-                return self.get_subproject_dep(name, dirname, varname, kwargs)
-
-        wrap_mode = self.coredata.get_builtin_option('wrap_mode')
-        forcefallback = wrap_mode == WrapMode.forcefallback and has_fallback
-        if name != '' and not forcefallback:
-            self._handle_featurenew_dependencies(name)
-            kwargs['required'] = required and not has_fallback
-            dep = dependencies.find_external_dependency(name, self.environment, kwargs)
-            kwargs['required'] = required
-            # Only store found-deps in the persistent cache.
-            # Never add fallback deps because they must always be evaluated
-            # otherwise we won't actually read all the build files.
-            if dep.found():
-                self.coredata.deps[identifier] = dep
-                return DependencyHolder(dep, self.subproject)
-
-        if has_fallback:
-            return self.dependency_fallback(display_name, kwargs)
+        self._handle_featurenew_dependencies(name)
+        kwargs['required'] = required
+        dep = dependencies.find_external_dependency(name, self.environment, kwargs)
+        # Only store found-deps in the persistent cache.
+        # Never add fallback deps because they must always be evaluated
+        # otherwise we won't actually read all the build files.
+        if dep.found():
+            self.coredata.deps[identifier] = dep
+            return DependencyHolder(dep, self.subproject)
 
         return self.notfound_dependency()
 
@@ -3063,26 +3141,6 @@ external dependencies (including libraries) must go to "dependencies".''')
         if len(fbinfo) != 2:
             raise InterpreterException('Fallback info must have exactly two items.')
         return fbinfo
-
-    def dependency_fallback(self, display_name, kwargs):
-        if self.coredata.get_builtin_option('wrap_mode') == WrapMode.nofallback:
-            mlog.log('Not looking for a fallback subproject for the dependency',
-                     mlog.bold(display_name), 'because:\nUse of fallback'
-                     'dependencies is disabled.')
-            return self.notfound_dependency()
-        elif self.coredata.get_builtin_option('wrap_mode') == WrapMode.forcefallback:
-            mlog.log('Looking for a fallback subproject for the dependency',
-                     mlog.bold(display_name), 'because:\nUse of fallback dependencies is forced.')
-        else:
-            mlog.log('Looking for a fallback subproject for the dependency',
-                     mlog.bold(display_name))
-        dirname, varname = self.get_subproject_infos(kwargs)
-        sp_kwargs = {
-            'default_options': kwargs.get('default_options', []),
-            'required': kwargs.get('required', True),
-        }
-        self.do_subproject(dirname, sp_kwargs)
-        return self.get_subproject_dep(display_name, dirname, varname, kwargs)
 
     @FeatureNewKwargs('executable', '0.42.0', ['implib'])
     @permittedKwargs(permitted_kwargs['executable'])
