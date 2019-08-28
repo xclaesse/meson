@@ -48,7 +48,7 @@ The following sections are allowed:
 
 ### constants
 
-*Since 0.56.0*
+*Since 0.55.0*
 
 String and list concatenation is supported using the `+` operator, joining paths
 is supported using the `/` operator.
@@ -116,6 +116,26 @@ b = a + 'World'
 #file2.ini:
 [constants]
 a = 'Hello'
+```
+
+*Since 0.56.0* The value in `[constants]` section of cross and native files can
+be overridden using `--cross-file-constant name=value` and `--native-file-constant name=value`
+command line arguments. Constants that don't have a default value must still be
+declared in the `[constants]` section with no value, user will have to set their
+value on the command line. This is intended to be used for example to set the path
+where user installed the toolchain or SDK. In the example below, user must pass
+`--cross-file-constant pkgconf=<value>`
+in the command line, and can pass `--cross-file-constant somepath=/other/path/to/toolchain`
+if they installed the toolchain in another location than the default.
+
+```ini
+[constants]
+pkgconf =
+somepath = '/default/path/to/toolchain'
+[binaries]
+c = somepath / 'gcc'
+cpp = somepath / 'g++'
+pkgconfig = pkgconf
 ```
 
 ### Binaries

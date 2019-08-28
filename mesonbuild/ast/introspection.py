@@ -31,9 +31,11 @@ build_target_functions = ['executable', 'jar', 'library', 'shared_library', 'sha
 class IntrospectionHelper:
     # mimic an argparse namespace
     def __init__(self, cross_file: str):
-        self.cross_file = cross_file  # type: str
-        self.native_file = None       # type: str
-        self.cmd_line_options = {}    # type: T.Dict[str, str]
+        self.cross_file = cross_file     # type: str
+        self.cross_files_constants = {}  # type: T.Dict[str, str]
+        self.native_file = None          # type: str
+        self.native_files_constants = {} # type: T.Dict[str, str]
+        self.cmd_line_options = {}       # type: T.Dict[str, str]
 
 class IntrospectionInterpreter(AstInterpreter):
     # Interpreter to detect the options without a build directory

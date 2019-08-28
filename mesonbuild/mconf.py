@@ -243,6 +243,8 @@ class Conf:
             print_default_values_warning()
 
 def run(options):
+    options.cross_file_constant = []
+    options.native_file_constant = []
     coredata.parse_cmd_line_options(options)
     builddir = os.path.abspath(os.path.realpath(options.builddir))
     c = None

@@ -37,10 +37,20 @@ def add_arguments(parser):
                         default=[],
                         action='append',
                         help='File containing overrides for native compilation environment.')
+    parser.add_argument('--native-file-constant',
+                        default=[],
+                        action='append',
+                        metavar='name=value',
+                        help='Replace "%%(variable)s" with "value" in a native file')
     parser.add_argument('--cross-file',
                         default=[],
                         action='append',
                         help='File describing cross compilation environment.')
+    parser.add_argument('--cross-file-constant',
+                        default=[],
+                        action='append',
+                        metavar='name=value',
+                        help='Replace "%%(variable)s" with "value" in a cross file')
     parser.add_argument('-v', '--version', action='version',
                         version=coredata.version)
     parser.add_argument('--profile-self', action='store_true', dest='profile',

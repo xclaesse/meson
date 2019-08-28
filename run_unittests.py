@@ -5021,6 +5021,8 @@ recommended as it is not supported on some platforms''')
                     '''
                     [constants]
                     compiler = 'gcc'
+                    const_with_default = 'foo'
+                    const_without_default =
                     '''))
             with open(crossfile2, 'w') as f:
                 f.write(textwrap.dedent(
@@ -5031,18 +5033,24 @@ recommended as it is not supported on some platforms''')
 
                     [properties]
                     c_args = common_flags + ['-DSOMETHING']
-                    cpp_args = c_args + ['-DSOMETHING_ELSE']
+                    cpp_args = c_args + ['-DSOMETHING_ELSE', const_with_default, const_without_default]
 
                     [binaries]
                     c = toolchain / compiler
                     '''))
 
-            values = mesonbuild.coredata.parse_machine_files([crossfile1, crossfile2])
+            constants = {'const_with_default': 'v1',
+                         'const_without_default': 'v2'}
+            values = mesonbuild.coredata.parse_machine_files([crossfile1, crossfile2], constants, kind='cross')
             self.assertEqual(values['binaries']['c'], '/toolchain/gcc')
             self.assertEqual(values['properties']['c_args'],
                              ['--sysroot=/toolchain/sysroot', '-DSOMETHING'])
             self.assertEqual(values['properties']['cpp_args'],
-                             ['--sysroot=/toolchain/sysroot', '-DSOMETHING', '-DSOMETHING_ELSE'])
+                             ['--sysroot=/toolchain/sysroot', '-DSOMETHING', '-DSOMETHING_ELSE', 'v1', 'v2'])
+
+            m = 'Variable const_without_default in machine file must be set with "--cross-file-constant const_without_default=value"'
+            with self.assertRaisesRegex(EnvironmentException, m):
+                values = mesonbuild.coredata.parse_machine_files([crossfile1, crossfile2], {}, kind='cross')
 
     @unittest.skipIf(is_windows(), 'Directory cleanup fails for some reason')
     def test_wrap_git(self):

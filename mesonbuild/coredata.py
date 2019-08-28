@@ -385,6 +385,7 @@ class CoreData:
         ) # type: PerMachine[T.defaultdict[str, OptionDictType]]
         self.base_options = {} # type: OptionDictType
         self.cross_files = self.__load_config_files(options, scratch_dir, 'cross')
+        self.cross_files_constants = options.cross_files_constants
         self.compilers = PerMachine(OrderedDict(), OrderedDict())
 
         build_cache = DependencyCache(self.builtins_per_machine, MachineChoice.BUILD)
@@ -394,6 +395,7 @@ class CoreData:
 
         # Only to print a warning if it changes between Meson invocations.
         self.config_files = self.__load_config_files(options, scratch_dir, 'native')
+        self.config_files_constants = options.native_files_constants
         self.builtin_options_libdir_cross_fixup()
         self.init_builtins('')
 
@@ -850,40 +852,51 @@ class CmdLineFileParser(configparser.ConfigParser):
         super().__init__(delimiters=['='], interpolation=None)
 
 class MachineFileParser():
-    def __init__(self, filenames: T.List[str]):
+    def __init__(self, filenames: T.List[str], constants: T.Dict[str, str], kind: str):
         self.parser = CmdLineFileParser()
         self.constants = {'True': True, 'False': False}
         self.sections = {}
+        self.kind = kind
 
         self.parser.read(filenames)
 
         # Parse [constants] first so they can be used in other sections
         if self.parser.has_section('constants'):
-            self.constants.update(self._parse_section('constants'))
+            self.constants.update(self._parse_section('constants', constants))
 
         for s in self.parser.sections():
             if s == 'constants':
                 continue
             self.sections[s] = self._parse_section(s)
 
-    def _parse_section(self, s):
+    def _parse_section(self, s, overrides=None):
         self.scope = self.constants.copy()
         section = {}
         for entry, value in self.parser.items(s):
             if ' ' in entry or '\t' in entry or "'" in entry or '"' in entry:
                 raise EnvironmentException('Malformed variable name {!r} in machine file.'.format(entry))
-            # Windows paths...
-            value = value.replace('\\', '\\\\')
-            try:
-                ast = mparser.Parser(value, 'machinefile').parse()
-                res = self._evaluate_statement(ast.lines[0])
-            except MesonException:
-                raise EnvironmentException('Malformed value in machine file variable {!r}.'.format(entry))
-            except KeyError as e:
-                raise EnvironmentException('Undefined constant {!r} in machine file variable {!r}.'.format(e.args[0], entry))
+            override = overrides.get(entry) if overrides else None
+            if override is not None:
+                res = override
+            elif value.strip():
+                res = self._evaluate_value(value)
+            else:
+                m = 'Variable {0} in machine file must be set with "--{1}-file-constant {0}=value"'
+                raise EnvironmentException(m.format(entry, self.kind))
             section[entry] = res
             self.scope[entry] = res
         return section
+
+    def _evaluate_value(self, value):
+        # Windows paths...
+        value = value.replace('\\', '\\\\')
+        try:
+            ast = mparser.Parser(value, 'machinefile').parse()
+            return self._evaluate_statement(ast.lines[0])
+        except MesonException:
+            raise EnvironmentException('Malformed value in machine file variable {!r}.'.format(entry))
+        except KeyError as e:
+            raise EnvironmentException('Undefined constant {!r} in machine file variable {!r}.'.format(e.args[0], entry))
 
     def _evaluate_statement(self, node):
         if isinstance(node, (mparser.StringNode)):
@@ -908,8 +921,8 @@ class MachineFileParser():
                     return os.path.join(l, r)
         raise EnvironmentException('Unsupported node type')
 
-def parse_machine_files(filenames):
-    parser = MachineFileParser(filenames)
+def parse_machine_files(filenames, constants, kind):
+    parser = MachineFileParser(filenames, constants, kind)
     return parser.sections
 
 def get_cmd_line_file(build_dir):
@@ -928,6 +941,16 @@ def read_cmd_line_file(build_dir, options):
     d = dict(config['options'])
     d.update(options.cmd_line_options)
     options.cmd_line_options = d
+
+    if config.has_section('cross_files_constants'):
+        d = dict(config['cross_files_constants'])
+        d.update(options.cross_files_constants)
+        options.cross_files_constants = d
+
+    if config.has_section('native_files_constants'):
+        d = dict(config['native_files_constants'])
+        d.update(options.native_files_constants)
+        options.native_files_constants = d
 
     properties = config['properties']
     if not options.cross_file:
@@ -952,6 +975,8 @@ def write_cmd_line_file(build_dir, options):
 
     config['options'] = cmd_line_options_to_string(options)
     config['properties'] = properties
+    config['cross_files_constants'] = options.cross_files_constants
+    config['native_files_constants'] = options.native_files_constants
     with open(filename, 'w') as f:
         config.write(f)
 
@@ -1033,6 +1058,8 @@ def create_options_dict(options):
 
 def parse_cmd_line_options(args):
     args.cmd_line_options = create_options_dict(args.projectoptions)
+    args.native_files_constants = create_options_dict(args.native_file_constant)
+    args.cross_files_constants = create_options_dict(args.cross_file_constant)
 
     # Merge builtin options set with --option into the dict.
     for name in chain(
