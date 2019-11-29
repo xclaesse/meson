@@ -979,6 +979,7 @@ header_permitted_kwargs = set([
 
 find_library_permitted_kwargs = set([
     'has_headers',
+    'has_header_symbol',
     'required',
     'dirs',
     'static',
@@ -1552,6 +1553,10 @@ class CompilerHolder(InterpreterObject):
         headers = mesonlib.stringlistify(kwargs.get('has_headers', []))
         for h in headers:
             if not self.has_header_method([h], has_header_kwargs):
+                return self.notfound_library(libname)
+        header_symbol = kwargs.get('has_header_symbol')
+        if header_symbol:
+            if not self.has_header_symbol_method(header_symbol, has_header_kwargs):
                 return self.notfound_library(libname)
 
         search_dirs = mesonlib.stringlistify(kwargs.get('dirs', []))

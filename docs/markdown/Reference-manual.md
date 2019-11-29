@@ -1937,7 +1937,11 @@ the following methods:
   `has_header()` method. All keyword arguments prefixed with `header_` will be
   passed down to `has_header()` method with the prefix removed. *Since 0.51.0*
   the `static` keyword (boolean) can be set to `true` to limit the search to
-  static libraries and `false` for dynamic/shared.
+  static libraries and `false` for dynamic/shared. *Since 0.53.0* the
+  `has_header_symbol` keyword argument can be a pair `[header, symbol]` list
+  that must be found as well, using `has_header_symbol()` method. All keyword
+  arguments prefixed with `header_` will be passed down to `has_header()` method
+  with the prefix removed.
 
 - `first_supported_argument(list_of_strings)`, given a list of
   strings, returns the first argument that passes the `has_argument`

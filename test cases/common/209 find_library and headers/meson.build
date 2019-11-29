@@ -21,3 +21,14 @@ lib = cc.find_library('z',
   header_include_directories : include_directories('.'),
   required : false)
 assert(not lib.found(), 'One header should be missing')
+
+lib = cc.find_library('z',
+  has_header_symbol : ['foo.h', 'bar'],
+  header_include_directories : include_directories('.'),
+  required : false)
+assert(not lib.found(), 'Symbol should not be found')
+
+lib = cc.find_library('z',
+  has_header_symbol : ['foo.h', 'foo'],
+  header_include_directories : include_directories('.'))
+assert(lib.found(), 'Symbol should be found')
