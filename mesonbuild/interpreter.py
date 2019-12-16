@@ -2060,7 +2060,7 @@ permitted_kwargs = {'add_global_arguments': {'language', 'native'},
                     'static_library': build.known_stlib_kwargs,
                     'both_libraries': known_library_kwargs,
                     'library': known_library_kwargs,
-                    'subdir': {'if_found'},
+                    'subdir': {'if_found', 'subproject'},
                     'subproject': {'version', 'default_options', 'required'},
                     'test': set.union(_base_test_args, {'is_parallel'}),
                     'vcs_tag': {'input', 'output', 'fallback', 'command', 'replace_string'},
@@ -2518,7 +2518,6 @@ external dependencies (including libraries) must go to "dependencies".''')
                 raise InterpreterException('Subproject "%s/%s" required but not found.' % (
                                            self.subproject_dir, dirname))
             return subproject
-
         subproject_dir_abs = os.path.join(self.environment.get_source_dir(), self.subproject_dir)
         r = wrap.Resolver(subproject_dir_abs, self.coredata.get_builtin_option('wrap_mode'))
         try:
@@ -3543,6 +3542,7 @@ This will become a hard error in the future.''' % kwargs['input'], location=self
         self.build.man.append(m)
         return m
 
+    @FeatureNewKwargs('subdir', '0.53.0', ['subproject'])
     @FeatureNewKwargs('subdir', '0.44.0', ['if_found'])
     @permittedKwargs(permitted_kwargs['subdir'])
     def func_subdir(self, node, args, kwargs):
@@ -3559,6 +3559,9 @@ This will become a hard error in the future.''' % kwargs['input'], location=self
                 raise InterpreterException('Object used in if_found does not have a found method.')
             if not i.found_method([], {}):
                 return
+        subproject = kwargs.get('subproject', False)
+        if not isinstance(subproject, bool):
+            raise InterpreterException('subproject keyword argument must be boolean.')
         prev_subdir = self.subdir
         subdir = os.path.join(prev_subdir, args[0])
         if os.path.isabs(subdir):
@@ -3577,18 +3580,27 @@ This will become a hard error in the future.''' % kwargs['input'], location=self
         if not os.path.isfile(absname):
             self.subdir = prev_subdir
             raise InterpreterException('Non-existent build file {!r}'.format(buildfilename))
-        with open(absname, encoding='utf8') as f:
-            code = f.read()
-        assert(isinstance(code, str))
-        try:
-            codeblock = mparser.Parser(code, self.subdir).parse()
-        except mesonlib.MesonException as me:
-            me.file = buildfilename
-            raise me
-        try:
-            self.evaluate_codeblock(codeblock)
-        except SubdirDoneRequest:
-            pass
+        if subproject:
+            dirname = args[0]
+            if dirname in self.subprojects:
+                raise InterpreterException('Subproject {!r} already configured'.format(dirname))
+            mlog.log()
+            with mlog.nested():
+                mlog.log('Executing subproject', mlog.bold(dirname), '\n')
+            self._do_subproject_meson(dirname, self.subdir, [], {})
+        else:
+            with open(absname, encoding='utf8') as f:
+                code = f.read()
+            assert(isinstance(code, str))
+            try:
+                codeblock = mparser.Parser(code, self.subdir).parse()
+            except mesonlib.MesonException as me:
+                me.file = buildfilename
+                raise me
+            try:
+                self.evaluate_codeblock(codeblock)
+            except SubdirDoneRequest:
+                pass
         self.subdir = prev_subdir
 
     def _get_kwarg_install_mode(self, kwargs):
