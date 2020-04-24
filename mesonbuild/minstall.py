@@ -15,6 +15,7 @@
 import sys, pickle, os, shutil, subprocess, errno
 import argparse
 import shlex
+import types
 from glob import glob
 from .scripts import depfixer
 from .scripts import destdir_join
@@ -32,6 +33,9 @@ but this will be changed in a future version of Meson to copy the symlink as is.
 build definitions so that it will not break when the change happens.'''
 
 selinux_updates = []
+dry_run = False
+noop = lambda *args, **kwargs: None
+Popen_noop = lambda *args, **kwargs: (types.SimpleNamespace(returncode=0), '', '')
 
 def add_arguments(parser):
     parser.add_argument('-C', default='.', dest='wd',
@@ -44,11 +48,14 @@ def add_arguments(parser):
                         help='Only overwrite files that are older than the copied file.')
     parser.add_argument('--quiet', default=False, action='store_true',
                         help='Do not print every file that was installed.')
+    parser.add_argument('--dry-run', '-n', action='store_true',
+                        help='Doesn\'t actually install, but print logs.')
 
 class DirMaker:
     def __init__(self, lf):
         self.lf = lf
         self.dirs = []
+        self.makedirs = os.makedirs if not dry_run else noop
 
     def makedirs(self, path, exist_ok=False):
         dirname = os.path.normpath(path)
@@ -57,7 +64,7 @@ class DirMaker:
             if not os.path.exists(dirname):
                 dirs.append(dirname)
             dirname = os.path.dirname(dirname)
-        os.makedirs(path, exist_ok=exist_ok)
+        self.makedirs(path, exist_ok=exist_ok)
 
         # store the directories in creation order, with the parent directory
         # before the child directories. Future calls of makedir() will not
@@ -86,6 +93,8 @@ def append_to_log(lf, line):
     lf.flush()
 
 def set_chown(path, user=None, group=None, dir_fd=None, follow_symlinks=True):
+    if dry_run:
+        return
     # shutil.chown will call os.chown without passing all the parameters
     # and particularly follow_symlinks, thus we replace it temporary
     # with a lambda with all the parameters so that follow_symlinks will
@@ -104,6 +113,8 @@ def set_chown(path, user=None, group=None, dir_fd=None, follow_symlinks=True):
         os.chown = real_os_chown
 
 def set_chmod(path, mode, dir_fd=None, follow_symlinks=True):
+    if dry_run:
+        return
     try:
         os.chmod(path, mode, dir_fd=dir_fd, follow_symlinks=follow_symlinks)
     except (NotImplementedError, OSError, SystemError):
@@ -111,6 +122,8 @@ def set_chmod(path, mode, dir_fd=None, follow_symlinks=True):
             os.chmod(path, mode, dir_fd=dir_fd)
 
 def sanitize_permissions(path, umask):
+    if dry_run:
+        return
     if umask == 'preserve':
         return
     new_perms = 0o777 if is_executable(path, follow_symlinks=False) else 0o666
@@ -122,6 +135,8 @@ def sanitize_permissions(path, umask):
         print(msg.format(path, new_perms, e.strerror))
 
 def set_mode(path, mode, default_umask):
+    if dry_run:
+        return
     if mode is None or (mode.perms_s or mode.owner or mode.group) is None:
         # Just sanitize permissions with the default umask
         sanitize_permissions(path, default_umask)
@@ -160,6 +175,8 @@ def restore_selinux_contexts():
 
     If $DESTDIR is set, do not warn if the call fails.
     '''
+    if dry_run:
+        return
     try:
         subprocess.check_call(['selinuxenabled'])
     except (FileNotFoundError, NotADirectoryError, PermissionError, subprocess.CalledProcessError):
@@ -224,6 +241,14 @@ class Installer:
         self.options = options
         self.lf = lf
         self.preserved_file_count = 0
+        self.mkdir = os.mkdir if not dry_run else noop
+        self.remove = os.remove if not dry_run else noop
+        self.symlink = os.symlink if not dry_run else noop
+        self.copy = shutil.copy if not dry_run else noop
+        self.copyfile = shutil.copyfile if not dry_run else noop
+        self.copystat = shutil.copystat if not dry_run else noop
+        self.fix_rpath = depfixer.fix_rpath if not dry_run else noop
+        self.Popen_safe = Popen_safe  if not dry_run else Popen_noop
 
     def log(self, msg):
         if not self.options.quiet:
@@ -255,7 +280,7 @@ class Installer:
                 append_to_log(self.lf, '# Preserving old file {}\n'.format(to_file))
                 self.preserved_file_count += 1
                 return False
-            os.remove(to_file)
+            self.remove(to_file)
         elif makedirs:
             # Unpack tuple
             dirmaker, outdir = makedirs
@@ -265,16 +290,16 @@ class Installer:
         if os.path.islink(from_file):
             if not os.path.exists(from_file):
                 # Dangling symlink. Replicate as is.
-                shutil.copy(from_file, outdir, follow_symlinks=False)
+                self.copy(from_file, outdir, follow_symlinks=False)
             else:
                 # Remove this entire branch when changing the behaviour to duplicate
                 # symlinks rather than copying what they point to.
                 print(symlink_warning)
-                shutil.copyfile(from_file, to_file)
-                shutil.copystat(from_file, to_file)
+                self.copyfile(from_file, to_file)
+                self.copystat(from_file, to_file)
         else:
-            shutil.copyfile(from_file, to_file)
-            shutil.copystat(from_file, to_file)
+            self.copyfile(from_file, to_file)
+            self.copystat(from_file, to_file)
         selinux_updates.append(to_file)
         append_to_log(self.lf, to_file)
         return True
@@ -326,7 +351,7 @@ class Installer:
                     print('Tried to copy directory {} but a file of that name already exists.'.format(abs_dst))
                     sys.exit(1)
                 data.dirmaker.makedirs(abs_dst)
-                shutil.copystat(abs_src, abs_dst)
+                self.copystat(abs_src, abs_dst)
                 sanitize_permissions(abs_dst, data.install_umask)
             for f in files:
                 abs_src = os.path.join(root, f)
@@ -339,8 +364,8 @@ class Installer:
                     sys.exit(1)
                 parent_dir = os.path.dirname(abs_dst)
                 if not os.path.isdir(parent_dir):
-                    os.mkdir(parent_dir)
-                    shutil.copystat(os.path.dirname(abs_src), parent_dir)
+                    self.mkdir(parent_dir)
+                    self.copystat(os.path.dirname(abs_src), parent_dir)
                 # FIXME: what about symlinks?
                 self.do_copyfile(abs_src, abs_dst)
                 set_mode(abs_dst, install_mode, data.install_umask)
@@ -438,9 +463,9 @@ class Installer:
             name = ' '.join(script + args)
             self.log('Running custom install script {!r}'.format(name))
             try:
-                rc = subprocess.call(script + args, env=child_env)
-                if rc != 0:
-                    sys.exit(rc)
+                p, o, e = self.Popen_safe(script + args, env=child_env)
+                if p.returncode != 0:
+                    sys.exit(p.returncode)
             except OSError:
                 print('Failed to run install script {!r}'.format(name))
                 sys.exit(1)
@@ -474,7 +499,7 @@ class Installer:
                         self.log('Not stripping jar target:', os.path.basename(fname))
                         continue
                     self.log('Stripping target {!r} using {}.'.format(fname, d.strip_bin[0]))
-                    ps, stdo, stde = Popen_safe(d.strip_bin + [outname])
+                    ps, stdo, stde = self.Popen_safe(d.strip_bin + [outname])
                     if ps.returncode != 0:
                         print('Could not strip file.\n')
                         print('Stdout:\n{}\n'.format(stdo))
@@ -499,10 +524,10 @@ class Installer:
                 try:
                     symlinkfilename = os.path.join(outdir, alias)
                     try:
-                        os.remove(symlinkfilename)
+                        self.remove(symlinkfilename)
                     except FileNotFoundError:
                         pass
-                    os.symlink(to, symlinkfilename)
+                    self.symlink(to, symlinkfilename)
                     append_to_log(self.lf, symlinkfilename)
                 except (NotImplementedError, OSError):
                     if not printed_symlink_error:
@@ -512,8 +537,8 @@ class Installer:
             if file_copied:
                 self.did_install_something = True
                 try:
-                    depfixer.fix_rpath(outname, install_rpath, final_path,
-                                       install_name_mappings, verbose=False)
+                    self.fix_rpath(outname, install_rpath, final_path,
+                                   install_name_mappings, verbose=False)
                 except SystemExit as e:
                     if isinstance(e.code, int) and e.code == 0:
                         pass
@@ -526,10 +551,12 @@ def run(opts):
     log_dir = os.path.join(private_dir, '../meson-logs')
     if not os.path.exists(os.path.join(opts.wd, datafilename)):
         sys.exit('Install data not found. Run this command in build directory root.')
-    if not opts.no_rebuild:
+    if not opts.no_rebuild and not opts.dry_run:
         if not rebuild_all(opts.wd):
             sys.exit(-1)
     os.chdir(opts.wd)
+    global dry_run
+    dry_run = opts.dry_run
     with open(os.path.join(log_dir, 'install-log.txt'), 'w') as lf:
         installer = Installer(opts, lf)
         append_to_log(lf, '# List of files installed by Meson')
