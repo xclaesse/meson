@@ -2836,8 +2836,9 @@ external dependencies (including libraries) must go to "dependencies".''')
         self.global_args_frozen = True
 
         mlog.log()
-        with mlog.nested():
-            mlog.log('Executing subproject', mlog.bold(dirname), 'method', mlog.bold(method), '\n')
+        with mlog.nested(dirname):
+            stack = ':'.join(self.subproject_stack + [dirname])
+            mlog.log('Executing subproject', mlog.bold(stack), 'method', mlog.bold(method), '\n')
         try:
             if method == 'meson':
                 return self._do_subproject_meson(dirname, subdir, default_options, kwargs)
@@ -2850,7 +2851,7 @@ external dependencies (including libraries) must go to "dependencies".''')
             raise
         except Exception as e:
             if not required:
-                with mlog.nested():
+                with mlog.nested(dirname):
                     # Suppress the 'ERROR:' prefix because this exception is not
                     # fatal and VS CI treat any logs with "ERROR:" as fatal.
                     mlog.exception(e, prefix=mlog.yellow('Exception:'))
@@ -2859,7 +2860,7 @@ external dependencies (including libraries) must go to "dependencies".''')
             raise e
 
     def _do_subproject_meson(self, dirname, subdir, default_options, kwargs, ast=None, build_def_files=None):
-        with mlog.nested():
+        with mlog.nested(dirname):
             new_build = self.build.copy()
             subi = Interpreter(new_build, self.backend, dirname, subdir, self.subproject_dir,
                                self.modules, default_options, ast=ast)
@@ -2897,7 +2898,7 @@ external dependencies (including libraries) must go to "dependencies".''')
         return self.subprojects[dirname]
 
     def _do_subproject_cmake(self, dirname, subdir, subdir_abs, default_options, kwargs):
-        with mlog.nested():
+        with mlog.nested(dirname):
             new_build = self.build.copy()
             prefix = self.coredata.builtins['prefix'].value
 
@@ -2917,7 +2918,7 @@ external dependencies (including libraries) must go to "dependencies".''')
             ast = cm_int.pretend_to_be_meson(options.target_options)
 
             mlog.log()
-            with mlog.nested():
+            with mlog.nested('cmake-ast'):
                 mlog.log('Processing generated meson AST')
 
                 # Debug print the generated meson file
