@@ -22,7 +22,7 @@ import shutil
 
 from . import mesonlib
 from . import mlog
-from . import mconf, mdist, minit, minstall, mintro, msetup, mtest, rewriter, msubprojects, munstable_coredata, mcompile
+from . import mconf, mdist, minit, minstall, mintro, msetup, mtest, rewriter, msubprojects, munstable_coredata, mcompile, mpkgconfig
 from .mesonlib import MesonException
 from .environment import detect_msys2_arch
 from .wrap import wraptool
@@ -69,6 +69,8 @@ class CommandLineParser:
         self.add_command('runpython', self.add_runpython_arguments, self.run_runpython_command,
                          help_msg=argparse.SUPPRESS)
         self.add_command('unstable-coredata', munstable_coredata.add_arguments, munstable_coredata.run,
+                         help_msg=argparse.SUPPRESS)
+        self.add_command('pkg-config', mpkgconfig.add_arguments, mpkgconfig.run,
                          help_msg=argparse.SUPPRESS)
 
     def add_command(self, name, add_arguments_func, run_func, help_msg, aliases=None):

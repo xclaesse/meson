@@ -39,6 +39,7 @@ from ..mesonlib import MachineChoice, MesonException, OrderedSet, PerMachine
 from ..mesonlib import Popen_safe, version_compare_many, version_compare, listify, stringlistify, extract_as_list, split_args
 from ..mesonlib import Version, LibType
 from ..mesondata import mesondata
+from . import pkgconfig
 
 if T.TYPE_CHECKING:
     from ..compilers.compilers import CompilerType  # noqa: F401
@@ -561,6 +562,8 @@ class PkgConfigDependency(ExternalDependency):
     # We cache all pkg-config subprocess invocations to avoid redundant calls
     pkgbin_cache = {}
 
+    class_repo = PerMachine(None, None)
+
     def __init__(self, name, environment, kwargs, language: T.Optional[str] = None):
         super().__init__('pkgconfig', environment, kwargs, language=language)
         self.name = name
@@ -580,7 +583,7 @@ class PkgConfigDependency(ExternalDependency):
             mlog.debug('Pkg-config binary for %s is not cached.' % self.for_machine)
             for potential_pkgbin in find_external_program(
                     self.env, self.for_machine, 'pkgconfig', 'Pkg-config',
-                    environment.default_pkgconfig, allow_default_for_cross=False):
+                    [], allow_default_for_cross=False):
                 version_if_ok = self.check_pkgconfig(potential_pkgbin)
                 if not version_if_ok:
                     continue
@@ -590,26 +593,25 @@ class PkgConfigDependency(ExternalDependency):
                 PkgConfigDependency.class_pkgbin[self.for_machine] = potential_pkgbin
                 break
             else:
-                if not self.silent:
-                    mlog.log('Found Pkg-config:', mlog.red('NO'))
                 # Set to False instead of None to signify that we've already
                 # searched for it and not found it
                 PkgConfigDependency.class_pkgbin[self.for_machine] = False
 
         self.pkgbin = PkgConfigDependency.class_pkgbin[self.for_machine]
-        if self.pkgbin is False:
-            self.pkgbin = None
-            msg = 'Pkg-config binary for machine %s not found. Giving up.' % self.for_machine
-            if self.required:
-                raise DependencyException(msg)
-            else:
-                mlog.debug(msg)
-                return
 
-        mlog.debug('Determining dependency {!r} with pkg-config executable '
-                   '{!r}'.format(name, self.pkgbin.get_path()))
-        ret, self.version, _ = self._call_pkgbin(['--modversion', name])
-        if ret != 0:
+        if PkgConfigDependency.class_repo[self.for_machine] is None:
+            libdir = self.env.properties[self.for_machine].get_pkg_config_libdir()
+            extra_paths = self.env.coredata.builtins_per_machine[self.for_machine]['pkg_config_path'].value
+            PkgConfigDependency.class_repo[self.for_machine] = pkgconfig.Repository(libdir, extra_paths)
+
+        if self.pkgbin:
+            mlog.debug('Determining dependency {!r} with pkg-config executable '
+                       '{!r}'.format(name, self.pkgbin.get_path()))
+        else:
+            mlog.debug('Determining dependency {!r} with internal pkg-config '
+                       'implementation'.format(name))
+
+        if not self._pkg_version(name):
             return
 
         self.is_found = True
@@ -671,6 +673,95 @@ class PkgConfigDependency(ExternalDependency):
             cache[(self.pkgbin, targs, fenv)] = self._call_pkgbin_real(args, env)
         return cache[(self.pkgbin, targs, fenv)]
 
+    def _pkg_version(self, name):
+        if self.pkgbin:
+            ret, self.version, _ = self._call_pkgbin(['--modversion', name])
+            return ret == 0
+        else:
+            try:
+                self.pkg = PkgConfigDependency.class_repo[self.for_machine].lookup(name)
+            except pkgconfig.PkgConfigException:
+                return False
+            self.version = self.pkg.version
+            return True
+
+    def _pkg_cflags(self):
+        if self.pkgbin:
+            env = None
+            if self.language == 'fortran':
+                # gfortran doesn't appear to look in system paths for INCLUDE files,
+                # so don't allow pkg-config to suppress -I flags for system paths
+                env = os.environ.copy()
+                env['PKG_CONFIG_ALLOW_SYSTEM_CFLAGS'] = '1'
+            ret, out, err = self._call_pkgbin(['--cflags', self.name], env=env)
+            if ret != 0:
+                raise DependencyException('Could not generate cargs for %s:\n%s\n' %
+                                          (self.name, err))
+            return self._split_args(out)
+        else:
+            allow_system_cflags = self.language == 'fortran'
+            return self.pkg.get_cflags(allow_system_cflags)
+
+    def _pkg_libs(self):
+        if self.pkgbin:
+            env = None
+            libcmd = [self.name, '--libs']
+            if self.static:
+                libcmd.append('--static')
+            env = os.environ.copy()
+            env['PKG_CONFIG_ALLOW_SYSTEM_LIBS'] = '1'
+            ret, out, err = self._call_pkgbin(libcmd, env=env)
+            if ret != 0:
+                raise DependencyException('Could not generate libs for %s:\n%s\n' %
+                                          (self.name, err))
+            # Also get the 'raw' output without -Lfoo system paths for adding -L
+            # args with -lfoo when a library can't be found, and also in
+            # gnome.generate_gir + gnome.gtkdoc which need -L -l arguments.
+            ret, out_raw, err_raw = self._call_pkgbin(libcmd)
+            if ret != 0:
+                raise DependencyException('Could not generate libs for %s:\n\n%s' %
+                                          (self.name, out_raw))
+            return self._split_args(out), self._split_args(out_raw)
+        else:
+            out = self.pkg.get_libs(self.static, allow_system_libs=True)
+            out_raw = self.pkg.get_libs(self.static, allow_system_libs=False)
+            return out, out_raw
+
+    def _pkg_variable(self, variable_name, definition, default):
+        if self.pkgbin:
+            options = ['--variable=' + variable_name, self.name]
+            if definition:
+                options = ['--define-variable=' + '='.join(definition)] + options
+
+            ret, out, err = self._call_pkgbin(options)
+            variable = ''
+            if ret != 0:
+                if self.required:
+                    raise DependencyException('dependency %s not found:\n%s\n' %
+                                              (self.name, err))
+            else:
+                variable = out.strip()
+
+                # pkg-config doesn't distinguish between empty and non-existent variables
+                # use the variable list to check for variable existence
+                if not variable:
+                    ret, out, _ = self._call_pkgbin(['--print-variables', self.name])
+                    if not re.search(r'^' + variable_name + r'$', out, re.MULTILINE):
+                        if default is not None:
+                            variable = default
+                        else:
+                            mlog.warning("pkgconfig variable '%s' not defined for dependency %s." % (variable_name, self.name))
+
+            mlog.debug('Got pkgconfig variable %s : %s' % (variable_name, variable))
+            return variable
+        else:
+            try:
+                variable = self.pkg.get_variable(variable_name, default, definition)
+            except PkgConfigException:
+                mlog.warning("pkgconfig variable '%s' not defined for dependency %s." % (variable_name, self.name))
+                variable = ''
+            return variable
+
     def _convert_mingw_paths(self, args: T.List[str]) -> T.List[str]:
         '''
         Both MSVC and native Python on Windows cannot handle MinGW-esque /c/foo
@@ -708,17 +799,8 @@ class PkgConfigDependency(ExternalDependency):
         return shlex.split(cmd)
 
     def _set_cargs(self):
-        env = None
-        if self.language == 'fortran':
-            # gfortran doesn't appear to look in system paths for INCLUDE files,
-            # so don't allow pkg-config to suppress -I flags for system paths
-            env = os.environ.copy()
-            env['PKG_CONFIG_ALLOW_SYSTEM_CFLAGS'] = '1'
-        ret, out, err = self._call_pkgbin(['--cflags', self.name], env=env)
-        if ret != 0:
-            raise DependencyException('Could not generate cargs for %s:\n%s\n' %
-                                      (self.name, err))
-        self.compile_args = self._convert_mingw_paths(self._split_args(out))
+        cflags = self._pkg_cflags()
+        self.compile_args = self._convert_mingw_paths(cflags)
 
     def _search_libs(self, out, out_raw):
         '''
@@ -747,7 +829,7 @@ class PkgConfigDependency(ExternalDependency):
         # always searched first.
         prefix_libpaths = OrderedSet()
         # We also store this raw_link_args on the object later
-        raw_link_args = self._convert_mingw_paths(self._split_args(out_raw))
+        raw_link_args = self._convert_mingw_paths(out_raw)
         for arg in raw_link_args:
             if arg.startswith('-L') and not arg.startswith(('-L-l', '-L-L')):
                 path = arg[2:]
@@ -775,7 +857,7 @@ class PkgConfigDependency(ExternalDependency):
         pkg_config_path = self._convert_mingw_paths(pkg_config_path)
         prefix_libpaths = sort_libpaths(prefix_libpaths, pkg_config_path)
         system_libpaths = OrderedSet()
-        full_args = self._convert_mingw_paths(self._split_args(out))
+        full_args = self._convert_mingw_paths(out)
         for arg in full_args:
             if arg.startswith(('-L-l', '-L-L')):
                 # These are D language arguments, not library paths
@@ -856,61 +938,16 @@ class PkgConfigDependency(ExternalDependency):
         return link_args, raw_link_args
 
     def _set_libs(self):
-        env = None
-        libcmd = [self.name, '--libs']
-        if self.static:
-            libcmd.append('--static')
-        # Force pkg-config to output -L fields even if they are system
-        # paths so we can do manual searching with cc.find_library() later.
-        env = os.environ.copy()
-        env['PKG_CONFIG_ALLOW_SYSTEM_LIBS'] = '1'
-        ret, out, err = self._call_pkgbin(libcmd, env=env)
-        if ret != 0:
-            raise DependencyException('Could not generate libs for %s:\n%s\n' %
-                                      (self.name, err))
-        # Also get the 'raw' output without -Lfoo system paths for adding -L
-        # args with -lfoo when a library can't be found, and also in
-        # gnome.generate_gir + gnome.gtkdoc which need -L -l arguments.
-        ret, out_raw, err_raw = self._call_pkgbin(libcmd)
-        if ret != 0:
-            raise DependencyException('Could not generate libs for %s:\n\n%s' %
-                                      (self.name, out_raw))
+        out, out_raw = self._pkg_libs()
         self.link_args, self.raw_link_args = self._search_libs(out, out_raw)
 
     def get_pkgconfig_variable(self, variable_name, kwargs):
-        options = ['--variable=' + variable_name, self.name]
-
-        if 'define_variable' in kwargs:
-            definition = kwargs.get('define_variable', [])
-            if not isinstance(definition, list):
-                raise DependencyException('define_variable takes a list')
-
-            if len(definition) != 2 or not all(isinstance(i, str) for i in definition):
+        definition = stringlistify(kwargs.get('define_variable', []))
+        if definition:
+            if len(definition) != 2:
                 raise DependencyException('define_variable must be made up of 2 strings for VARIABLENAME and VARIABLEVALUE')
-
-            options = ['--define-variable=' + '='.join(definition)] + options
-
-        ret, out, err = self._call_pkgbin(options)
-        variable = ''
-        if ret != 0:
-            if self.required:
-                raise DependencyException('dependency %s not found:\n%s\n' %
-                                          (self.name, err))
-        else:
-            variable = out.strip()
-
-            # pkg-config doesn't distinguish between empty and non-existent variables
-            # use the variable list to check for variable existence
-            if not variable:
-                ret, out, _ = self._call_pkgbin(['--print-variables', self.name])
-                if not re.search(r'^' + variable_name + r'$', out, re.MULTILINE):
-                    if 'default' in kwargs:
-                        variable = kwargs['default']
-                    else:
-                        mlog.warning("pkgconfig variable '%s' not defined for dependency %s." % (variable_name, self.name))
-
-        mlog.debug('Got pkgconfig variable %s : %s' % (variable_name, variable))
-        return variable
+        default = kwargs.get('default', None)
+        return self._pkg_variable(variable_name, definition, default)
 
     @staticmethod
     def get_methods():
