@@ -1011,7 +1011,7 @@ class Test(InterpreterObject):
 class SubprojectHolder(InterpreterObject, ObjectHolder):
 
     def __init__(self, subinterpreter, subproject_dir, name, warnings=0, disabled_feature=None,
-                 exception=None):
+                 exception=None, caller=''):
         InterpreterObject.__init__(self)
         ObjectHolder.__init__(self, subinterpreter)
         self.name = name
@@ -1019,6 +1019,7 @@ class SubprojectHolder(InterpreterObject, ObjectHolder):
         self.disabled_feature = disabled_feature
         self.exception = exception
         self.subproject_dir = subproject_dir
+        self.caller = caller
         self.methods.update({'get_variable': self.get_variable_method,
                              'found': self.found_method,
                              })
@@ -2959,7 +2960,8 @@ external dependencies (including libraries) must go to "dependencies".''')
         self.active_projectname = current_active
         self.subprojects.update(subi.subprojects)
         self.subprojects[dirname] = SubprojectHolder(subi, self.subproject_dir, dirname,
-                                                     warnings=subi_warnings)
+                                                     warnings=subi_warnings,
+                                                     caller=self.subproject)
         # Duplicates are possible when subproject uses files from project root
         if build_def_files:
             self.build_def_files = list(set(self.build_def_files + build_def_files))
@@ -3263,13 +3265,15 @@ external dependencies (including libraries) must go to "dependencies".''')
         # Add automatic 'Supbrojects' section in main project.
         all_subprojects = collections.OrderedDict()
         for name, subp in sorted(self.subprojects.items()):
-            value = subp.found()
+            value = [subp.found()]
             if subp.disabled_feature:
-                value = [value, 'Feature {!r} disabled'.format(subp.disabled_feature)]
+                value += ['Feature {!r} disabled'.format(subp.disabled_feature)]
             elif subp.exception:
-                value = [value, str(subp.exception)]
+                value += [str(subp.exception)]
             elif subp.warnings > 0:
-                value = [value, '{} warnings'.format(subp.warnings)]
+                value += ['{} warnings'.format(subp.warnings)]
+            if subp.caller:
+                value += ['(from {})'.format(subp.caller)]
             all_subprojects[name] = value
         if all_subprojects:
             self.summary_impl('Subprojects', all_subprojects,
