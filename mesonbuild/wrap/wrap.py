@@ -197,10 +197,11 @@ def verbose_git(cmd: T.List[str], workingdir: str, check: bool = False) -> bool:
         raise WrapException(str(e))
 
 class Resolver:
-    def __init__(self, source_dir: str, subdir: str, wrap_mode: WrapMode = WrapMode.default) -> None:
+    def __init__(self, source_dir: str, subdir: str, wrap_mode: WrapMode = WrapMode.default, download_only=True) -> None:
         self.source_dir = source_dir
         self.subdir = subdir
         self.wrap_mode = wrap_mode
+        self.download_only = download_only
         self.subdir_root = os.path.join(source_dir, subdir)
         self.cachedir = os.path.join(self.subdir_root, 'packagecache')
         self.wraps = {} # type: T.Dict[str, PackageDefinition]
@@ -285,7 +286,7 @@ class Resolver:
             self.dirname = os.path.join(self.subdir_root, self.directory)
             # Check if the wrap comes from the main project.
             main_fname = os.path.join(self.subdir_root, self.wrap.basename)
-            if self.wrap.filename != main_fname:
+            if self.wrap.filename != main_fname and not self.download_only:
                 rel = os.path.relpath(self.wrap.filename, self.source_dir)
                 mlog.log('Using', mlog.bold(rel))
                 # Write a dummy wrap file in main project that redirect to the
@@ -333,6 +334,9 @@ class Resolver:
                 else:
                     raise WrapException('Unknown wrap type {!r}'.format(self.wrap.type))
             self.apply_patch()
+
+        if self.download_only:
+            return rel_path
 
         # A meson.build or CMakeLists.txt file is required in the directory
         if method == 'meson' and not os.path.exists(meson_file):
@@ -385,6 +389,8 @@ class Resolver:
 
     def get_file(self) -> None:
         path = self.get_file_internal('source')
+        if self.download_only:
+            return
         extract_dir = self.subdir_root
         # Some upstreams ship packages that do not have a leading directory.
         # Create one for them.
@@ -565,6 +571,8 @@ class Resolver:
             raise WrapException(m.format(self.wrap.basename))
         if 'patch_filename' in self.wrap.values:
             path = self.get_file_internal('patch')
+            if self.download_only:
+                return
             try:
                 shutil.unpack_archive(path, self.subdir_root)
             except Exception:
@@ -572,6 +580,8 @@ class Resolver:
                     shutil.unpack_archive(path, workdir)
                     self.copy_tree(workdir, self.subdir_root)
         elif 'patch_directory' in self.wrap.values:
+            if self.download_only:
+                return
             from ..interpreterbase import FeatureNew
             FeatureNew('patch_directory', '0.55.0').use(self.current_subproject)
             patch_dir = self.wrap.values['patch_directory']

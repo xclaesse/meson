@@ -279,11 +279,18 @@ def checkout(r, wrap, repo_dir, options):
 
 def download(r, wrap, repo_dir, options):
     mlog.log('Download {}...'.format(wrap.name))
+    wrap_resolver = r
+    if options.dest:
+        dest = Path(options.dest)
+        dest.mkdir(parents=True, exist_ok=True)
+        wrap_resolver = Resolver(dest.parent, dest.name, download_only=True)
+        wrap_resolver.merge_wraps(r)
+        repo_dir = Path(dest, wrap.directory).as_posix()
     if os.path.isdir(repo_dir):
         mlog.log('  -> Already downloaded')
         return True
     try:
-        r.resolve(wrap.name, 'meson')
+        wrap_resolver.resolve(wrap.name, 'meson')
         mlog.log('  -> done')
     except WrapException as e:
         mlog.log('  ->', mlog.red(str(e)))
@@ -342,6 +349,9 @@ def add_arguments(parser):
     p = subparsers.add_parser('download', help='Ensure subprojects are fetched, even if not in use. ' +
                                                'Already downloaded subprojects are not modified. ' +
                                                'This can be used to pre-fetch all subprojects and avoid downloads during configure.')
+    p.add_argument('--dest', default=None,
+                   help="Destination directory where to download subprojects. " +
+                        "This can be used to generate a cache outside of project's subprojects directory")
     add_common_arguments(p)
     add_subprojects_argument(p)
     p.set_defaults(subprojects_func=download)
