@@ -2283,13 +2283,12 @@ class CustomTarget(Target):
         return []
 
     def is_internal(self) -> bool:
-        if not self.should_install():
-            return True
-        for out in self.get_outputs():
-            # Can't check if this is a static library, so try to guess
-            if not out.endswith(('.a', '.lib')):
-                return False
-        return True
+        '''
+        Returns True iif this is a not installed static library.
+        '''
+        if len(self.outputs) != 1:
+            return False
+        return CustomTargetIndex(self, self.outputs[0]).is_internal()
 
     def extract_all_objects_recurse(self):
         return self.get_outputs()
@@ -2443,7 +2442,11 @@ class CustomTargetIndex:
         return self.target.should_install()
 
     def is_internal(self) -> bool:
-        return self.target.is_internal()
+        '''
+        Returns True iif this is a not installed static library
+        '''
+        suf = os.path.splitext(self.output)[-1]
+        return (suf == '.a' or suf == '.lib') and not self.should_install()
 
     def extract_all_objects_recurse(self):
         return self.target.extract_all_objects_recurse()
