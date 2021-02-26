@@ -869,13 +869,13 @@ class Backend:
         result = set()
         prospectives = set()
         if isinstance(target, build.BuildTarget):
-            prospectives.update(target.get_transitive_link_deps())
+            target.collect_link_targets(prospectives)
             # External deps
             for deppath in self.rpaths_for_bundled_shared_libraries(target, exclude_system=False):
                 result.add(os.path.normpath(os.path.join(self.environment.get_build_dir(), deppath)))
         for bdep in extra_bdeps:
             prospectives.add(bdep)
-            prospectives.update(bdep.get_transitive_link_deps())
+            bdep.collect_link_targets(prospectives)
         # Internal deps
         for ld in prospectives:
             if ld == '' or ld == '.':

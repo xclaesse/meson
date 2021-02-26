@@ -890,15 +890,13 @@ class BuildTarget(Target):
         return ExtractedObjects(self, self.sources, self.generated, self.objects,
                                 recursive)
 
-    def get_all_link_deps(self):
-        return self.get_transitive_link_deps()
-
-    @lru_cache(maxsize=None)
-    def get_transitive_link_deps(self):
-        result = []
-        for i in self.link_targets:
-            result += i.get_all_link_deps()
-        return result
+    def collect_link_targets(self, result: T.Set[Target], visited: T.Optional[T.Set[Target]] = None):
+        if visited is None:
+            visited = set()
+        if self not in visited:
+            visited.add(self)
+            for i in self.link_targets:
+                i.collect_link_targets(result, visited)
 
     def get_link_deps_mapping(self, prefix, environment):
         return self.get_transitive_link_deps_mapping(prefix, environment)
@@ -2112,8 +2110,9 @@ class SharedLibrary(BuildTarget):
             return [self.vs_import_filename, self.gcc_import_filename]
         return []
 
-    def get_all_link_deps(self):
-        return [self] + self.get_transitive_link_deps()
+    def collect_link_targets(self, result: T.Set[Target], visited: T.Optional[T.Set[Target]] = None):
+        result.add(self)
+        super().collect_link_targets(result, visited)
 
     def get_aliases(self) -> T.Dict[str, str]:
         """
@@ -2417,8 +2416,8 @@ class CustomTarget(Target, CommandBase):
     def get_link_dep_subdirs(self):
         return OrderedSet()
 
-    def get_all_link_deps(self):
-        return []
+    def collect_link_targets(self, result: T.Set[Target], visited: T.Optional[T.Set[Target]] = None):
+        pass
 
     def is_internal(self) -> bool:
         if not self.should_install():
@@ -2565,8 +2564,8 @@ class CustomTargetIndex:
     def get_id(self):
         return self.target.get_id()
 
-    def get_all_link_deps(self):
-        return self.target.get_all_link_deps()
+    def collect_link_targets(self, result: T.Set[Target], visited: T.Optional[T.Set[Target]] = None):
+        self.target.collect_link_targets(result, visited)
 
     def get_link_deps_mapping(self, prefix, environment):
         return self.target.get_link_deps_mapping(prefix, environment)
