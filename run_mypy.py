@@ -36,6 +36,7 @@ modules = [
     'mesonbuild/mcompile.py',
     'mesonbuild/mdevenv.py',
     'mesonbuild/utils/core.py',
+    'mesonbuild/utils/pkgconfig.py',
     'mesonbuild/utils/platform.py',
     'mesonbuild/utils/universal.py',
     'mesonbuild/mconf.py',
