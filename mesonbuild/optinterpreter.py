@@ -32,6 +32,7 @@ if T.TYPE_CHECKING:
         'value': object,
         'min': T.Optional[int],
         'max': T.Optional[int],
+        'deprecated': T.Union[bool, T.Dict[str, str], T.List[str]],
         })
 
 
@@ -160,6 +161,8 @@ class OptionInterpreter:
                   KwargInfo('value', object),
                   KwargInfo('min', (int, type(None))),
                   KwargInfo('max', (int, type(None))),
+                  KwargInfo('deprecated', (bool, ContainerTypeInfo(dict, str), ContainerTypeInfo(list, str)),
+                            default=False, since='0.60.0')
                   )
     @typed_pos_args('option', str)
     def func_option(self, args: T.Tuple[str], kwargs: 'FuncOptionArgs') -> None:
@@ -180,6 +183,7 @@ class OptionInterpreter:
         known_parser_kwargs = {'value', 'choices', 'yield', 'min', 'max'}
         parser_kwargs = {k: v for k, v in kwargs.items() if k in known_parser_kwargs and v is not None}
         opt = parser(description, parser_kwargs)
+        opt.deprecated = kwargs['deprecated']
 
         key = mesonlib.OptionKey(opt_name, self.subproject)
         if key in self.options:
