@@ -68,6 +68,7 @@ lang_suffixes = {
     'swift': ('swift',),
     'java': ('java',),
     'cython': ('pyx', ),
+    'nasm': ('asm', 'nasm'),
 }
 all_languages = lang_suffixes.keys()
 c_cpp_suffixes =  {'h'}
@@ -84,7 +85,7 @@ clib_langs = ('objcpp', 'cpp', 'objc', 'c', 'fortran')
 # List of languages that can be linked with C code directly by the linker
 # used in build.py:process_compilers() and build.py:get_dynamic_linker()
 # This must be sorted, see sort_clink().
-clink_langs = ('d', 'cuda') + clib_langs
+clink_langs = ('d', 'cuda', 'nasm') + clib_langs
 
 SUFFIX_TO_LANG = dict(itertools.chain(*(
     [(suffix, lang) for suffix in v] for lang, v in lang_suffixes.items()))) # type: T.Dict[str, str]
