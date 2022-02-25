@@ -101,13 +101,15 @@ def lookahead(iter: T.Iterator[_T]) -> T.Iterator[T.Tuple[_T, T.Optional[_T]]]:
     """Get the current value of the iterable, and the next if possible.
 
     :param iter: The iterable to look into
-    :return: A tuple of the current value, and, if possible, the next
+    :yield: A tuple of the current value, and, if possible, the next
+    :return: nothing
     """
     current: _T
     next_: T.Optional[_T]
     try:
         next_ = next(iter)
     except StopIteration:
+        # This is an empty iterator, there's nothing to look ahead to
         return
 
     while True:
