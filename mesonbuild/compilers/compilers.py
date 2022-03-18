@@ -89,6 +89,13 @@ clink_langs = ('d', 'cuda') + clib_langs
 SUFFIX_TO_LANG = dict(itertools.chain(*(
     [(suffix, lang) for suffix in v] for lang, v in lang_suffixes.items()))) # type: T.Dict[str, str]
 
+# Those suffixes mean different language depending on the case. Note that what
+# matters is the case specified in the build definition and not on FS.
+# .C is for C++.
+# .S is for assembly that needs to be preprocessed by a C compiler.
+# .s is for assembly that does not need to be preprocessed.
+CASE_SENSITIVE_SUFFIXES = {'C', 'S'}
+
 # Languages that should use LDFLAGS arguments when linking.
 LANGUAGES_USING_LDFLAGS = {'objcpp', 'cpp', 'objc', 'c', 'fortran', 'd', 'cuda'}  # type: T.Set[str]
 # Languages that should use CPPFLAGS arguments when linking.
@@ -516,10 +523,10 @@ class Compiler(HoldableObject, metaclass=abc.ABCMeta):
     def can_compile(self, src: 'mesonlib.FileOrString') -> bool:
         if isinstance(src, mesonlib.File):
             src = src.fname
-        suffix = os.path.splitext(src)[1]
-        if suffix != '.C':
+        suffix = src.split('.')[-1]
+        if suffix not in CASE_SENSITIVE_SUFFIXES:
             suffix = suffix.lower()
-        return bool(suffix) and suffix[1:] in self.can_compile_suffixes
+        return suffix in self.can_compile_suffixes
 
     def get_id(self) -> str:
         return self.id
