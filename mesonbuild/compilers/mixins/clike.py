@@ -37,7 +37,7 @@ from ...linkers import GnuLikeDynamicLinkerMixin, SolarisDynamicLinker, CompCert
 from ...mesonlib import LibType
 from ...coredata import OptionKey
 from .. import compilers
-from ..compilers import CompileCheckMode
+from ..compilers import CompileCheckMode, CompilerMode
 from .visualstudio import VisualStudioLikeCompiler
 
 if T.TYPE_CHECKING:
@@ -46,6 +46,7 @@ if T.TYPE_CHECKING:
     from ...environment import Environment
     from ...compilers.compilers import Compiler
     from ...programs import ExternalProgram
+    from ..coredata import KeyedOptionDictType
 else:
     # This is a bit clever, for mypy we pretend that these mixins descend from
     # Compiler, so we get all of the methods and attributes defined for us, but

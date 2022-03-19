@@ -26,11 +26,14 @@ import typing as T
 from ... import mesonlib
 from ... import mlog
 from ...mesonlib import OptionKey
+from ..compilers import CompilerMode
 
 if T.TYPE_CHECKING:
     from ..._typing import ImmutableListProtocol
     from ...environment import Environment
     from ..compilers import Compiler
+    from ...arglist import CompilerArgs
+    from ...envconfig import MachineInfo
 else:
     # This is a bit clever, for mypy we pretend that these mixins descend from
     # Compiler, so we get all of the methods and attributes defined for us, but
@@ -396,3 +399,49 @@ class GnuCompiler(GnuLikeCompiler):
         elif threads > 0:
             return [f'-flto={threads}']
         return super().get_lto_compile_args(threads=threads)
+
+    def get_compiler_modes(self) -> T.List[CompilerMode]:
+        return super().get_compiler_modes() + [
+            GnuAssemblerMode(self),
+            GnuPreprocessorMode(self),
+        ]
+
+    def get_mode_for_source(self, source: 'mesonlib.File') -> 'CompilerMode':
+        if source.endswith('.S'):
+            return GnuPreprocessorMode(self, 's')
+        if source.endswith('.s'):
+            return GnuAssemblerMode(self)
+        return super().get_mode_for_source(source)
+
+
+class GnuPreprocessorMode(CompilerMode):
+    def __init__(self, compiler: GnuCompiler, output_suffix: str = 'i'):
+        super().__init__(compiler)
+        self.output_suffix = output_suffix
+
+    def get_id(self) -> str:
+        return f'{self.compiler.language}_PREPROCESSOR'
+
+    def get_description(self, output: str) -> str:
+        return f'Preprocessing source {output}'
+
+    def get_exelist(self, ccache: bool = True) -> T.List[str]:
+        return super().get_exelist(ccache) + self.compiler.get_preprocess_only_args()
+
+    def get_output_suffix(self, options: 'KeyedOptionDictType') -> str:
+        return self.output_suffix
+
+
+class GnuAssemblerMode(CompilerMode):
+    def get_id(self) -> str:
+        return f'{self.compiler.language}_ASSEMBLER'
+
+    def get_description(self, output: str) -> str:
+        return f'Assembling object {output}'
+
+    def get_exelist(self, ccache: bool = True) -> T.List[str]:
+        # ccache does not understand -Wa,-MD and won't regenerate depfile
+        return super().get_exelist(ccache=False)
+
+    def get_dependency_gen_args(self, outtarget: str, outfile: str) -> T.List[str]:
+        return [f'-Wa,-MD,{outfile}']
