@@ -1126,7 +1126,7 @@ class Compiler(HoldableObject, metaclass=abc.ABCMeta):
     def get_include_args(self, path: str, is_system: bool) -> T.List[str]:
         return []
 
-    def depfile_for_object(self, objfile: str) -> str:
+    def depfile_for_object(self, objfile: str) -> T.Optional[str]:
         return objfile + '.' + self.get_depfile_suffix()
 
     def get_depfile_suffix(self) -> str:
@@ -1274,6 +1274,14 @@ class Compiler(HoldableObject, metaclass=abc.ABCMeta):
     def get_no_warn_args(self) -> T.List[str]:
         """Arguments to completely disable warnings."""
         return []
+
+    def get_transpile_suffixes(self) -> T.Optional[T.Tuple[str, ...]]:
+        """File suffixes that this compiler can transpile into another language.
+        """
+        return None
+
+    def get_transpile_output_suffix(self, options: 'KeyedOptionDictType') -> T.Optional[str]:
+        return None
 
 
 def get_global_options(lang: str,

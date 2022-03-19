@@ -136,3 +136,6 @@ class ValaCompiler(Compiler):
 
     def thread_link_flags(self, env: 'Environment') -> T.List[str]:
         return []
+
+    def get_transpile_suffixes(self) -> T.Tuple[str, ...]:
+        return self.file_suffixes
