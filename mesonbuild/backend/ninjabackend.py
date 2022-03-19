@@ -39,6 +39,7 @@ from ..compilers import (
     mixins,
     PGICCompiler,
     VisualStudioLikeCompiler,
+    CompilerMode
 )
 from ..linkers import ArLinker, RSPFileSyntax
 from ..mesonlib import (
@@ -593,11 +594,12 @@ class NinjaBackend(backends.Backend):
         # TODO: Rather than an explicit list here, rules could be marked in the
         # rule store as being wanted in compdb
         for for_machine in MachineChoice:
-            for lang in self.environment.coredata.compilers[for_machine]:
-                rules += [f"{rule}{ext}" for rule in [self.get_compiler_rule_name(lang, for_machine)]
-                          for ext in ['', '_RSP']]
-                rules += [f"{rule}{ext}" for rule in [self.get_pch_rule_name(lang, for_machine)]
-                          for ext in ['', '_RSP']]
+            for lang, comp in self.environment.coredata.compilers[for_machine].items():
+                for mode in comp.get_compiler_modes():
+                    r = self.compiler_mode_to_rule_name(mode)
+                    rules += [f"{r}{ext}" for ext in ['', '_RSP']]
+                r = self.get_pch_rule_name(lang, for_machine)
+                rules += [f"{r}{ext}" for ext in ['', '_RSP']]
         compdb_options = ['-x'] if mesonlib.version_compare(self.ninja_version, '>=1.9') else []
         ninja_compdb = self.ninja_command + ['-t', 'compdb'] + compdb_options + rules
         builddir = self.environment.get_build_dir()
@@ -897,12 +899,9 @@ class NinjaBackend(backends.Backend):
                 outputs = self.generate_vala_compile(target, transpile_sources, vapis)
                 target_sources += [(File.from_built_relative(f), lang) for f in outputs]
             else:
-                opt_proxy = self.get_compiler_options_for_target(target)
-                out_suffix = comp.get_transpile_output_suffix(opt_proxy)
                 for src in transpile_sources:
                     o, s = self.generate_single_compile(target, src, src.is_built,
                                                         compiler=comp,
-                                                        out_suffix=out_suffix,
                                                         order_deps=order_deps)
                     target_sources.append((File.from_built_relative(o), lang))
 
@@ -1744,15 +1743,19 @@ class NinjaBackend(backends.Backend):
 
     @classmethod
     def get_compiler_rule_name(cls, lang: str, for_machine: MachineChoice) -> str:
-        return '{}_COMPILER{}'.format(lang, cls.get_rule_suffix(for_machine))
+        return f'{lang}_COMPILER{cls.get_rule_suffix(for_machine)}'
 
     @classmethod
     def get_pch_rule_name(cls, lang: str, for_machine: MachineChoice) -> str:
-        return '{}_PCH{}'.format(lang, cls.get_rule_suffix(for_machine))
+        return f'{lang}_PCH{cls.get_rule_suffix(for_machine)}'
 
     @classmethod
     def compiler_to_rule_name(cls, compiler: Compiler) -> str:
         return cls.get_compiler_rule_name(compiler.get_language(), compiler.for_machine)
+
+    @classmethod
+    def compiler_mode_to_rule_name(cls, mode: CompilerMode) -> str:
+        return f'{mode.get_id()}{cls.get_rule_suffix(mode.compiler.for_machine)}'
 
     @classmethod
     def compiler_to_pch_rule_name(cls, compiler: Compiler) -> str:
@@ -2043,7 +2046,7 @@ https://gcc.gnu.org/bugzilla/show_bug.cgi?id=47485'''))
         self.add_rule(NinjaRule(rule, command, args, description, **options))
         self.created_llvm_ir_rule[compiler.for_machine] = True
 
-    def generate_compile_rule_for(self, langname, compiler):
+    def generate_compile_rule_for(self, langname, compiler, mode):
         if langname == 'java':
             self.generate_java_compile_rule(compiler)
             return
@@ -2067,11 +2070,15 @@ https://gcc.gnu.org/bugzilla/show_bug.cgi?id=47485'''))
         crstr = self.get_rule_suffix(compiler.for_machine)
         if langname == 'fortran':
             self.generate_fortran_dep_hack(crstr)
-        rule = self.get_compiler_rule_name(langname, compiler.for_machine)
-        depargs = NinjaCommandArg.list(compiler.get_dependency_gen_args('$out', '$DEPFILE'), Quoting.none)
-        command = compiler.get_exelist()
-        args = ['$ARGS'] + depargs + NinjaCommandArg.list(compiler.get_output_args('$out'), Quoting.none) + compiler.get_compile_only_args() + ['$in']
-        description = f'Compiling {compiler.get_display_language()} object $out'
+        rule = self.compiler_mode_to_rule_name(mode)
+        depargs = mode.get_dependency_gen_args('$out', '$DEPFILE')
+        command = mode.get_exelist()
+        args = ['$ARGS']
+        args += NinjaCommandArg.list(depargs, Quoting.none)
+        args += NinjaCommandArg.list(compiler.get_output_args('$out'), Quoting.none)
+        args += compiler.get_compile_only_args() + ['$in']
+        description = mode.get_description('$out')
+        deps = depfile = extra = None
         if isinstance(compiler, VisualStudioLikeCompiler):
             deps = 'msvc'
             depfile = None
@@ -2121,7 +2128,8 @@ https://gcc.gnu.org/bugzilla/show_bug.cgi?id=47485'''))
             for langname, compiler in clist.items():
                 if compiler.get_id() == 'clang':
                     self.generate_llvm_ir_compile_rule(compiler)
-                self.generate_compile_rule_for(langname, compiler)
+                for mode in compiler.get_compiler_modes():
+                    self.generate_compile_rule_for(langname, compiler, mode)
                 self.generate_pch_rule_for(langname, compiler)
 
     def generate_generator_list_rules(self, target):
@@ -2475,8 +2483,7 @@ https://gcc.gnu.org/bugzilla/show_bug.cgi?id=47485'''))
         return commands
 
     def generate_single_compile(self, target, src, is_generated=False,
-                                header_deps=None, order_deps=None, compiler=None,
-                                out_suffix=None):
+                                header_deps=None, order_deps=None, compiler=None):
         """
         Compiles C/C++, ObjC/ObjC++, Fortran, and D sources
         """
@@ -2488,6 +2495,11 @@ https://gcc.gnu.org/bugzilla/show_bug.cgi?id=47485'''))
 
         if compiler is None:
             compiler = get_compiler_for_source(target.compilers.values(), src)
+
+        mode = compiler.get_mode_for_source(src)
+        opt_proxy = self.get_compiler_options_for_target(target)
+        out_suffix = mode.get_output_suffix(opt_proxy)
+
         commands = self._generate_single_compile_base_args(target, compiler)
 
         # Include PCH header as first thing as it must be the first one or it will be
@@ -2540,7 +2552,6 @@ https://gcc.gnu.org/bugzilla/show_bug.cgi?id=47485'''))
             arr.append(i)
             pch_dep = arr
 
-        compiler_name = self.compiler_to_rule_name(compiler)
         extra_deps = []
         if compiler.get_language() == 'fortran':
             # Can't read source file to scan for deps if it's generated later
@@ -2565,6 +2576,9 @@ https://gcc.gnu.org/bugzilla/show_bug.cgi?id=47485'''))
                                                     rel_obj)
                         self.add_build(depelem)
             commands += compiler.get_module_outdir_args(self.get_target_private_dir(target))
+
+        compiler_name = self.compiler_mode_to_rule_name(mode)
+        commands = mode.filter_args(commands, self.environment.machines[target.for_machine])
 
         element = NinjaBuildElement(self.all_outputs, rel_obj, compiler_name, rel_src)
         self.add_header_deps(target, element, header_deps)

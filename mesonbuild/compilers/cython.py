@@ -92,7 +92,7 @@ class CythonCompiler(Compiler):
     def get_transpile_suffixes(self) -> T.Tuple[str, ...]:
         return self.file_suffixes
 
-    def get_transpile_output_suffix(self, options: 'KeyedOptionDictType') -> str:
+    def get_output_suffix(self, options: 'KeyedOptionDictType') -> str:
         lang = options[OptionKey('language', machine=self.for_machine, lang=self.language)].value
         assert isinstance(lang, str), 'for mypy'
         return lang

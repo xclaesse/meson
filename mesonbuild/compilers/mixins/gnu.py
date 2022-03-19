@@ -26,11 +26,14 @@ import typing as T
 from ... import mesonlib
 from ... import mlog
 from ...mesonlib import OptionKey
+from ..compilers import CompilerMode
 
 if T.TYPE_CHECKING:
     from ..._typing import ImmutableListProtocol
     from ...environment import Environment
     from ..compilers import Compiler
+    from ...arglist import CompilerArgs
+    from ...envconfig import MachineInfo
 else:
     # This is a bit clever, for mypy we pretend that these mixins descend from
     # Compiler, so we get all of the methods and attributes defined for us, but
@@ -158,9 +161,15 @@ class GnuLikeCompiler(Compiler, metaclass=abc.ABCMeta):
             self.base_options.add(OptionKey('b_asneeded'))
         if not self.info.is_hurd():
             self.base_options.add(OptionKey('b_sanitize'))
+
         # All GCC-like backends can do assembly
         self.can_compile_suffixes.add('s')
         self.can_compile_suffixes.add('S')
+        self.as_exelist: T.Optional[T.List[str]] = None
+        cmd = self.get_exelist() + ['-print-prog-name=as']
+        pc, stdo, stde = mesonlib.Popen_safe(cmd)
+        if pc.returncode == 0:
+            self.as_exelist = [stdo.strip()]
 
     def get_pic_args(self) -> T.List[str]:
         if self.info.is_windows() or self.info.is_cygwin() or self.info.is_darwin():
@@ -322,6 +331,54 @@ class GnuLikeCompiler(Compiler, metaclass=abc.ABCMeta):
 
     def get_coverage_args(self) -> T.List[str]:
         return ['--coverage']
+
+    def get_transpile_suffixes(self) -> T.Tuple[str, ...]:
+        return ('S', )
+
+    def get_compiler_modes(self) -> T.List[CompilerMode]:
+        return super().get_compiler_modes() + [GnuLikeAssemblerMode(self)]
+
+    def get_mode_for_source(self, source: 'mesonlib.File') -> 'CompilerMode':
+        if source.endswith('.s'):
+            return GnuLikeAssemblerMode(self)
+        return super().get_mode_for_source(source)
+
+
+class GnuLikeAssemblerMode(CompilerMode):
+    def __init__(self, compiler: GnuLikeCompiler):
+        super().__init__(compiler)
+        self.has_as = compiler.as_exelist is not None
+
+    def get_id(self) -> str:
+        return f'{self.compiler.language}_ASSEMBLER'
+
+    def get_description(self, output: str) -> str:
+        return f'Assembling object {output}'
+
+    def get_exelist(self, ccache: bool = True) -> T.List[str]:
+        if self.has_as:
+            return T.cast(GnuLikeCompiler, self.compiler).as_exelist.copy()
+        return super().get_exelist(ccache)
+
+    def get_dependency_gen_args(self, outtarget: str, outfile: str) -> T.List[str]:
+        if self.has_as:
+            return ['--MD', outfile]
+        return super().get_dependency_gen_args(outtarget, outfile)
+
+    def filter_args(self, args: 'CompilerArgs', info: 'MachineInfo') -> 'CompilerArgs':
+        if not self.has_as:
+            return super().filter_args(args, info)
+        result = type(args)(self.compiler)
+        for a in args:
+            if a.startswith(('-I', '-g')):
+                result.append(a)
+            elif a.startswith('-Wa,'):
+                result += a[4:].split(',')
+        if info.is_64_bit:
+            result.append('--64')
+        else:
+            result.append('--32')
+        return result
 
 
 class GnuCompiler(GnuLikeCompiler):

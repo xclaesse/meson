@@ -956,6 +956,8 @@ class AllPlatformTests(BasePlatformTests):
             # Classify commands
             if 'Ic-asm' in cmd['command']:
                 if cmd['file'].endswith('.S'):
+                    commands['c-asm']['asm-pp'] = compiler
+                elif cmd['file'].endswith('.s'):
                     commands['c-asm']['asm'] = compiler
                 elif cmd['file'].endswith('.c'):
                     commands['c-asm']['c'] = compiler
@@ -963,6 +965,8 @@ class AllPlatformTests(BasePlatformTests):
                     raise AssertionError('{!r} found in cpp-asm?'.format(cmd['command']))
             elif 'Icpp-asm' in cmd['command']:
                 if cmd['file'].endswith('.S'):
+                    commands['cpp-asm']['asm-pp'] = compiler
+                elif cmd['file'].endswith('.s'):
                     commands['cpp-asm']['asm'] = compiler
                 elif cmd['file'].endswith('.cpp'):
                     commands['cpp-asm']['cpp'] = compiler
@@ -970,6 +974,8 @@ class AllPlatformTests(BasePlatformTests):
                     raise AssertionError('{!r} found in cpp-asm?'.format(cmd['command']))
             elif 'Ic-cpp-asm' in cmd['command']:
                 if cmd['file'].endswith('.S'):
+                    commands['c-cpp-asm']['asm-pp'] = compiler
+                elif cmd['file'].endswith('.s'):
                     commands['c-cpp-asm']['asm'] = compiler
                 elif cmd['file'].endswith('.c'):
                     commands['c-cpp-asm']['c'] = compiler
@@ -979,6 +985,8 @@ class AllPlatformTests(BasePlatformTests):
                     raise AssertionError('{!r} found in c-cpp-asm?'.format(cmd['command']))
             elif 'Icpp-c-asm' in cmd['command']:
                 if cmd['file'].endswith('.S'):
+                    commands['cpp-c-asm']['asm-pp'] = compiler
+                elif cmd['file'].endswith('.s'):
                     commands['cpp-c-asm']['asm'] = compiler
                 elif cmd['file'].endswith('.c'):
                     commands['cpp-c-asm']['c'] = compiler
@@ -994,6 +1002,10 @@ class AllPlatformTests(BasePlatformTests):
         self.assertEqual(commands['cpp-asm']['asm'], commands['c-cpp-asm']['c'])
         self.assertEqual(commands['c-cpp-asm']['asm'], commands['c-cpp-asm']['c'])
         self.assertEqual(commands['cpp-c-asm']['asm'], commands['cpp-c-asm']['c'])
+        self.assertEqual(commands['c-asm']['asm-pp'], commands['c-asm']['c'])
+        self.assertEqual(commands['cpp-asm']['asm-pp'], commands['c-cpp-asm']['c'])
+        self.assertEqual(commands['c-cpp-asm']['asm-pp'], commands['c-cpp-asm']['c'])
+        self.assertEqual(commands['cpp-c-asm']['asm-pp'], commands['cpp-c-asm']['c'])
         self.assertNotEqual(commands['cpp-asm']['asm'], commands['cpp-asm']['cpp'])
         self.assertNotEqual(commands['c-cpp-asm']['c'], commands['c-cpp-asm']['cpp'])
         self.assertNotEqual(commands['cpp-c-asm']['c'], commands['cpp-c-asm']['cpp'])
