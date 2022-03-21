@@ -155,6 +155,7 @@ from .compilers import (
     LANGUAGES_USING_LDFLAGS,
     sort_clink,
     SUFFIX_TO_LANG,
+    EXCLUSIVE_SUFFIXES,
 )
 from .detect import (
     compiler_from_language,

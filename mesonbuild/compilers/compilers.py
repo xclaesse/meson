@@ -87,6 +87,11 @@ clib_langs = ('objcpp', 'cpp', 'objc', 'c', 'fortran')
 # This must be sorted, see sort_clink().
 clink_langs = ('d', 'cuda', 'nasm') + clib_langs
 
+# Suffixes that can mean different language depending on available compilers.
+# .asm can be compiled by either NASM or MASM, so adding both those compilers
+# is not allowed.
+EXCLUSIVE_SUFFIXES = {'asm'}
+
 SUFFIX_TO_LANG = dict(itertools.chain(*(
     [(suffix, lang) for suffix in v] for lang, v in lang_suffixes.items()))) # type: T.Dict[str, str]
 

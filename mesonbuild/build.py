@@ -730,11 +730,12 @@ class BuildTarget(Target):
 
     def __init__(self, name: str, subdir: str, subproject: SubProject, for_machine: MachineChoice,
                  sources: T.List['SourceOutputs'], structured_sources: T.Optional[StructuredSources],
-                 objects, environment: environment.Environment, kwargs):
+                 objects, environment: environment.Environment, compilers: T.Dict[str, 'Compiler'], kwargs):
         super().__init__(name, subdir, subproject, True, for_machine)
         unity_opt = environment.coredata.get_option(OptionKey('unity'))
         self.is_unity = unity_opt == 'on' or (unity_opt == 'subprojects' and subproject != '')
         self.environment = environment
+        self.all_compilers = compilers
         self.compilers = OrderedDict() # type: OrderedDict[str, Compiler]
         self.objects: T.List[T.Union[str, 'File', 'ExtractedObjects']] = []
         self.structured_sources = structured_sources
@@ -768,18 +769,12 @@ class BuildTarget(Target):
         self.process_objectlist(objects)
         self.process_kwargs(kwargs, environment)
         self.check_unknown_kwargs(kwargs)
-        self.process_compilers()
         if not any([self.sources, self.generated, self.objects, self.link_whole, self.structured_sources]):
             raise InvalidArguments(f'Build target {name} has no sources.')
-        self.process_compilers_late()
-        self.validate_sources()
         self.validate_install(environment)
         self.check_module_linking()
-
         if self.structured_sources and any([self.sources, self.generated]):
             raise MesonException('cannot mix structured sources and unstructured sources')
-        if self.structured_sources and 'rust' not in self.compilers:
-            raise MesonException('structured sources are only supported in Rust targets')
 
     def __repr__(self):
         repr_str = "<{0} {1}: {2}>"
@@ -849,15 +844,15 @@ class BuildTarget(Target):
                 removed = True
         return removed
 
-    def process_compilers_late(self):
+    def process_compilers_late(self, extra_languages: T.List[str]):
         """Processes additional compilers after kwargs have been evaluated.
 
         This can add extra compilers that might be required by keyword
         arguments, such as link_with or dependencies. It will also try to guess
         which compiler to use if one hasn't been selected already.
         """
-        # Populate list of compilers
-        compilers = self.environment.coredata.compilers[self.for_machine]
+        for lang in extra_languages:
+            self.compilers[lang] = self.all_compilers[lang]
 
         # did user override clink_langs for this target?
         link_langs = [self.link_language] if self.link_language else clink_langs
@@ -880,21 +875,27 @@ class BuildTarget(Target):
             # files of unknown origin. Just add the first clink compiler
             # that we have and hope that it can link these objects
             for lang in link_langs:
-                if lang in compilers:
-                    self.compilers[lang] = compilers[lang]
+                if lang in self.all_compilers:
+                    self.compilers[lang] = self.all_compilers[lang]
                     break
 
-    def process_compilers(self) -> None:
+        # Now that we have the final list of compilers we can do some sanity checks
+        if self.structured_sources and 'rust' not in self.compilers:
+            raise MesonException('structured sources are only supported in Rust targets')
+        self.validate_sources()
+
+    def process_compilers(self) -> T.List[str]:
         '''
         Populate self.compilers, which is the list of compilers that this
         target will use for compiling all its sources.
         We also add compilers that were used by extracted objects to simplify
         dynamic linker determination.
+        Returns a list of missing languages that we can add implicitly, such as
+        C/C++ compiler for cython.
         '''
+        extra_languages = []
         if not any([self.sources, self.generated, self.objects, self.structured_sources]):
-            return
-        # Populate list of compilers
-        compilers = self.environment.coredata.compilers[self.for_machine]
+            return extra_languages
         # Pre-existing sources
         sources: T.List['FileOrString'] = list(self.sources)
         generated = self.generated.copy()
@@ -941,7 +942,7 @@ class BuildTarget(Target):
             # are expected to be able to add arbitrary non-source files to the
             # sources list
             for s in sources:
-                for lang, compiler in compilers.items():
+                for lang, compiler in self.all_compilers.items():
                     if compiler.can_compile(s):
                         if lang not in self.compilers:
                             self.compilers[lang] = compiler
@@ -958,39 +959,15 @@ class BuildTarget(Target):
         # If all our sources are Vala, our target also needs the C compiler but
         # it won't get added above.
         if 'vala' in self.compilers and 'c' not in self.compilers:
-            self.compilers['c'] = compilers['c']
+            self.compilers['c'] = self.all_compilers['c']
         if 'cython' in self.compilers:
             key = OptionKey('language', machine=self.for_machine, lang='cython')
             if key in self.option_overrides_compiler:
                 value = self.option_overrides_compiler[key]
             else:
                 value = self.environment.coredata.options[key].value
-
-            try:
-                self.compilers[value] = compilers[value]
-            except KeyError:
-                # TODO: it would be nice to not have to do this here, but we
-                # have two problems to work around:
-                # 1. If this is set via an override we have no way to know
-                #    before now that we need a compiler for the non-default language
-                # 2. Because Cython itself initializes the `cython_language`
-                #    option, we have no good place to insert that you need it
-                #    before now, so we just have to do it here.
-                comp = detect_compiler_for(self.environment, value, self.for_machine)
-
-                # This is copied verbatim from the interpreter
-                if self.for_machine == MachineChoice.HOST or self.environment.is_cross_build():
-                    logger_fun = mlog.log
-                else:
-                    logger_fun = mlog.debug
-                logger_fun(comp.get_display_language(), 'compiler for the', self.for_machine.get_lower_case_name(), 'machine:',
-                           mlog.bold(' '.join(comp.get_exelist())), comp.get_version_string())
-                if comp.linker is not None:
-                    logger_fun(comp.get_display_language(), 'linker for the', self.for_machine.get_lower_case_name(), 'machine:',
-                               mlog.bold(' '.join(comp.linker.get_exelist())), comp.linker.id, comp.linker.version)
-                if comp is None:
-                    raise MesonException(f'Cannot find required compiler {value}')
-                self.compilers[value] = comp
+            extra_languages.append(value)
+        return extra_languages
 
     def validate_sources(self):
         if not self.sources:
@@ -1558,14 +1535,13 @@ You probably should put it in link_with instead.''')
         return langs
 
     def get_prelinker(self):
-        all_compilers = self.environment.coredata.compilers[self.for_machine]
         if self.link_language:
-            comp = all_compilers[self.link_language]
+            comp = self.all_compilers[self.link_language]
             return comp
         for l in clink_langs:
             if l in self.compilers:
                 try:
-                    prelinker = all_compilers[l]
+                    prelinker = self.all_compilers[l]
                 except KeyError:
                     raise MesonException(
                         f'Could not get a prelinker linker for build target {self.name!r}. '
@@ -1584,13 +1560,9 @@ You probably should put it in link_with instead.''')
         that can link compiled C. We don't actually need to add an exception
         for Vala here because of that.
         '''
-        # Populate list of all compilers, not just those being used to compile
-        # sources in this target
-        all_compilers = self.environment.coredata.compilers[self.for_machine]
-
         # If the user set the link_language, just return that.
         if self.link_language:
-            comp = all_compilers[self.link_language]
+            comp = self.all_compilers[self.link_language]
             return comp, comp.language_stdlib_only_link_flags(self.environment)
 
         # Languages used by dependencies
@@ -1599,7 +1571,7 @@ You probably should put it in link_with instead.''')
         for l in clink_langs:
             if l in self.compilers or l in dep_langs:
                 try:
-                    linker = all_compilers[l]
+                    linker = self.all_compilers[l]
                 except KeyError:
                     raise MesonException(
                         f'Could not get a dynamic linker for build target {self.name!r}. '
@@ -1609,7 +1581,7 @@ You probably should put it in link_with instead.''')
                 added_languages: T.Set[str] = set()
                 for dl in itertools.chain(self.compilers, dep_langs):
                     if dl != linker.language:
-                        stdlib_args += all_compilers[dl].language_stdlib_only_link_flags(self.environment)
+                        stdlib_args += self.all_compilers[dl].language_stdlib_only_link_flags(self.environment)
                         added_languages.add(dl)
                 # Type of var 'linker' is Compiler.
                 # Pretty hard to fix because the return value is passed everywhere
@@ -1658,7 +1630,7 @@ You probably should put it in link_with instead.''')
         '''
         # Rustc can use msvc style linkers
         if self.uses_rust():
-            compiler = self.environment.coredata.compilers[self.for_machine]['rust']
+            compiler = self.all_compilers['rust']
         else:
             compiler, _ = self.get_clink_dynamic_linker_and_stdlibs()
         # Mixing many languages with MSVC is not supported yet so ignore stdlibs.
@@ -1838,12 +1810,14 @@ class Executable(BuildTarget):
 
     def __init__(self, name: str, subdir: str, subproject: str, for_machine: MachineChoice,
                  sources: T.List[File], structured_sources: T.Optional['StructuredSources'],
-                 objects, environment: environment.Environment, kwargs):
+                 objects, environment: environment.Environment, compilers: T.Dict[str, 'Compiler'],
+                 kwargs):
         self.typename = 'executable'
         key = OptionKey('b_pie')
         if 'pie' not in kwargs and key in environment.coredata.options:
             kwargs['pie'] = environment.coredata.options[key].value
-        super().__init__(name, subdir, subproject, for_machine, sources, structured_sources, objects, environment, kwargs)
+        super().__init__(name, subdir, subproject, for_machine, sources, structured_sources, objects,
+                         environment, compilers, kwargs)
         # Unless overridden, executables have no suffix or prefix. Except on
         # Windows and with C#/Mono executables where the suffix is 'exe'
         if not hasattr(self, 'prefix'):
@@ -1965,9 +1939,11 @@ class StaticLibrary(BuildTarget):
 
     def __init__(self, name: str, subdir: str, subproject: str, for_machine: MachineChoice,
                  sources: T.List[File], structured_sources: T.Optional['StructuredSources'],
-                 objects, environment: environment.Environment, kwargs):
+                 objects, environment: environment.Environment, compilers: T.Dict[str, 'Compiler'],
+                 kwargs):
         self.typename = 'static library'
-        super().__init__(name, subdir, subproject, for_machine, sources, structured_sources, objects, environment, kwargs)
+        super().__init__(name, subdir, subproject, for_machine, sources, structured_sources, objects,
+                         environment, compilers, kwargs)
         if 'cs' in self.compilers:
             raise InvalidArguments('Static libraries not supported for C#.')
         if 'rust' in self.compilers:
@@ -2028,7 +2004,8 @@ class SharedLibrary(BuildTarget):
 
     def __init__(self, name: str, subdir: str, subproject: str, for_machine: MachineChoice,
                  sources: T.List[File], structured_sources: T.Optional['StructuredSources'],
-                 objects, environment: environment.Environment, kwargs):
+                 objects, environment: environment.Environment, compilers: T.Dict[str, 'Compiler'],
+                 kwargs):
         self.typename = 'shared library'
         self.soversion = None
         self.ltversion = None
@@ -2045,7 +2022,8 @@ class SharedLibrary(BuildTarget):
         self.debug_filename = None
         # Use by the pkgconfig module
         self.shared_library_only = False
-        super().__init__(name, subdir, subproject, for_machine, sources, structured_sources, objects, environment, kwargs)
+        super().__init__(name, subdir, subproject, for_machine, sources, structured_sources, objects,
+                         environment, compilers, kwargs)
         if 'rust' in self.compilers:
             # If no crate type is specified, or it's the generic lib type, use dylib
             if not hasattr(self, 'rust_crate_type') or self.rust_crate_type == 'lib':
@@ -2357,13 +2335,14 @@ class SharedModule(SharedLibrary):
 
     def __init__(self, name: str, subdir: str, subproject: str, for_machine: MachineChoice,
                  sources: T.List[File], structured_sources: T.Optional['StructuredSources'],
-                 objects, environment: environment.Environment, kwargs):
+                 objects, environment: environment.Environment,
+                 compilers: T.Dict[str, 'Compiler'], kwargs):
         if 'version' in kwargs:
             raise MesonException('Shared modules must not specify the version kwarg.')
         if 'soversion' in kwargs:
             raise MesonException('Shared modules must not specify the soversion kwarg.')
         super().__init__(name, subdir, subproject, for_machine, sources,
-                         structured_sources, objects, environment, kwargs)
+                         structured_sources, objects, environment, compilers, kwargs)
         self.typename = 'shared module'
         # We need to set the soname in cases where build files link the module
         # to build targets, see: https://github.com/mesonbuild/meson/issues/9492
@@ -2685,9 +2664,11 @@ class Jar(BuildTarget):
 
     def __init__(self, name: str, subdir: str, subproject: str, for_machine: MachineChoice,
                  sources: T.List[File], structured_sources: T.Optional['StructuredSources'],
-                 objects, environment: environment.Environment, kwargs):
+                 objects, environment: environment.Environment, compilers: T.Dict[str, 'Compiler'],
+                 kwargs):
         self.typename = 'jar'
-        super().__init__(name, subdir, subproject, for_machine, sources, structured_sources, objects, environment, kwargs)
+        super().__init__(name, subdir, subproject, for_machine, sources, structured_sources, objects,
+                         environment, compilers, kwargs)
         for s in self.sources:
             if not s.endswith('.java'):
                 raise InvalidArguments(f'Jar source {s} is not a java file.')
