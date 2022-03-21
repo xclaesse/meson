@@ -1326,6 +1326,9 @@ class CompilerMode:
     def get_output_suffix(self, options: 'KeyedOptionDictType') -> str:
         return self.compiler.get_output_suffix(options)
 
+    def get_output_args(self, target: str) -> T.List[str]:
+        return self.compiler.get_output_args(target)
+
     def filter_args(self, args: CompilerArgs, info: 'MachineInfo') -> CompilerArgs:
         return args
 

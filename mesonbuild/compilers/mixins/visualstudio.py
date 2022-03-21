@@ -383,6 +383,35 @@ class VisualStudioLikeCompiler(Compiler, metaclass=abc.ABCMeta):
     def get_argument_syntax(self) -> str:
         return 'msvc'
 
+    def get_compiler_modes(self) -> T.List[CompilerMode]:
+        return super().get_compiler_modes() + [VSLikePreprocessorMode(self)]
+
+    def get_mode_for_source(self, source: 'mesonlib.File') -> 'CompilerMode':
+        if source.endswith('.S'):
+            return VSLikePreprocessorMode(self, 's')
+        return super().get_mode_for_source(source)
+
+
+class VSLikePreprocessorMode(CompilerMode):
+    def __init__(self, compiler: CLikeCompiler, output_suffix: str = 'i'):
+        super().__init__(compiler)
+        self.output_suffix = output_suffix
+
+    def get_id(self) -> str:
+        return f'{self.compiler.language}_PREPROCESSOR'
+
+    def get_description(self, output: str) -> str:
+        return f'Preprocessing source {output}'
+
+    def get_exelist(self, ccache: bool = True) -> T.List[str]:
+        return super().get_exelist(ccache) + ['/P']
+
+    def get_output_suffix(self, options: 'KeyedOptionDictType') -> str:
+        return self.output_suffix
+
+    def get_output_args(self, target: str) -> T.List[str]:
+        return ['/Fi' + target]
+
 
 class MSVCCompiler(VisualStudioLikeCompiler):
 
