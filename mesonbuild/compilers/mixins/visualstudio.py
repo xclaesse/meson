@@ -23,6 +23,7 @@ import typing as T
 from ... import arglist
 from ... import mesonlib
 from ... import mlog
+from ...compilers import CompilerMode
 
 if T.TYPE_CHECKING:
     from ...environment import Environment
@@ -390,6 +391,13 @@ class MSVCCompiler(VisualStudioLikeCompiler):
 
     id = 'msvc'
 
+    def __init__(self, target: str):
+        super().__init__(target)
+
+        # Assembly
+        self.can_compile_suffixes.add('s')
+        self.can_compile_suffixes.add('S')
+
     def get_compile_debugfile_args(self, rel_obj: str, pch: bool = False) -> T.List[str]:
         args = super().get_compile_debugfile_args(rel_obj, pch)
         # When generating a PDB file with PCH, all compile commands write
@@ -412,6 +420,37 @@ class MSVCCompiler(VisualStudioLikeCompiler):
 
     def get_pch_base_name(self, header: str) -> str:
         return os.path.basename(header)
+
+    def get_compiler_modes(self) -> T.List[CompilerMode]:
+        return super().get_compiler_modes() + [
+            MSVCPreprocessorMode(self),
+        ]
+
+    def get_mode_for_source(self, source: 'mesonlib.File') -> 'CompilerMode':
+        if source.endswith('.S'):
+            return MSVCPreprocessorMode(self, 'asm')
+        return super().get_mode_for_source(source)
+
+
+class MSVCPreprocessorMode(CompilerMode):
+    def __init__(self, compiler: MSVCCompiler, output_suffix: str = 'i'):
+        super().__init__(compiler)
+        self.output_suffix = output_suffix
+
+    def get_id(self) -> str:
+        return f'{self.compiler.language}_PREPROCESSOR'
+
+    def get_description(self, output: str) -> str:
+        return f'Preprocessing source {output}'
+
+    def get_exelist(self, ccache: bool = True) -> T.List[str]:
+        return super().get_exelist(ccache) + ['/P', '/Tc']
+
+    def get_output_suffix(self, options: 'KeyedOptionDictType') -> str:
+        return self.output_suffix
+
+    def get_output_args(self, target: str) -> T.List[str]:
+        return ['/Fi' + target]
 
 
 class ClangClCompiler(VisualStudioLikeCompiler):

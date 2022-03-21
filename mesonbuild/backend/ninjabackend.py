@@ -2052,7 +2052,7 @@ https://gcc.gnu.org/bugzilla/show_bug.cgi?id=47485'''))
         command = mode.get_exelist()
         args = ['$ARGS']
         args += NinjaCommandArg.list(depargs, Quoting.none)
-        args += NinjaCommandArg.list(compiler.get_output_args('$out'), Quoting.none)
+        args += NinjaCommandArg.list(mode.get_output_args('$out'), Quoting.none)
         args += compiler.get_compile_only_args() + ['$in']
         description = mode.get_description('$out')
         if isinstance(compiler, VisualStudioLikeCompiler):
