@@ -69,6 +69,7 @@ lang_suffixes = {
     'java': ('java',),
     'cython': ('pyx', ),
     'nasm': ('asm', 'nasm'),
+    'masm': ('asm',),
 }
 all_languages = lang_suffixes.keys()
 c_cpp_suffixes =  {'h'}

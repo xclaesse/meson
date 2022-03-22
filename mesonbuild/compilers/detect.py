@@ -137,7 +137,7 @@ from .vala import ValaCompiler
 from .mixins.visualstudio import VisualStudioLikeCompiler
 from .mixins.gnu import GnuCompiler
 from .mixins.clang import ClangCompiler
-from .asm import NasmCompiler, YasmCompiler
+from .asm import NasmCompiler, YasmCompiler, MasmCompiler, ArmAsmCompiler
 
 import subprocess
 import platform
@@ -218,6 +218,7 @@ def compiler_from_language(env: 'Environment', lang: str, for_machine: MachineCh
         'swift': detect_swift_compiler,
         'cython': detect_cython_compiler,
         'nasm': detect_nasm_compiler,
+        'masm': detect_masm_compiler,
     }
     return lang_map[lang](env, for_machine) if lang in lang_map else None
 
@@ -1249,6 +1250,44 @@ def detect_nasm_compiler(env: 'Environment', for_machine: MachineChoice) -> Comp
             return comp_class(comp, version, for_machine, info, cc.linker, is_cross=is_cross)
     _handle_exceptions(popen_exceptions, compilers)
     raise EnvironmentException('Unreachable code (exception to make mypy happy)')
+
+def detect_masm_compiler(env: 'Environment', for_machine: MachineChoice) -> Compiler:
+    is_cross = env.is_cross_build(for_machine)
+
+    # We need a C compiler to properly detect the machine info and linker
+    cc = detect_c_compiler(env, for_machine)
+    if not is_cross:
+        from ..environment import detect_machine_info
+        info = detect_machine_info({'c': cc})
+    else:
+        info = env.machines[for_machine]
+
+    if info.cpu_family == 'x86':
+        comp_class = MasmCompiler
+        comp = ['ml']
+    elif info.cpu_family == 'x86_64':
+        comp_class = MasmCompiler
+        comp = ['ml64']
+    elif info.cpu_family == 'arm':
+        comp_class = ArmAsmCompiler
+        comp = ['armasm']
+    elif info.cpu_family == 'aarch64':
+        comp_class = ArmAsmCompiler
+        comp = ['armasm64']
+    else:
+        raise EnvironmentException(f'MASM compiler does not support {info.cpu_family} CPU family')
+
+    popen_exceptions: T.Dict[str, Exception] = {}
+    try:
+        p, o, e = Popen_safe(comp)
+        output = o if comp[0].startswith('arm') else e
+    except OSError as e:
+        popen_exceptions[' '.join(comp)] = e
+        _handle_exceptions(popen_exceptions, [comp])
+
+    version = search_version(output)
+    env.coredata.add_lang_args(comp_class.language, comp_class, for_machine, env)
+    return comp_class(comp, version, for_machine, info, cc.linker, is_cross=is_cross)
 
 
 # GNU/Clang defines and version

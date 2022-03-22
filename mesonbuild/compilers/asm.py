@@ -93,3 +93,40 @@ class YasmCompiler(NasmCompiler):
 
     def get_dependency_gen_args(self, outtarget: str, outfile: str) -> T.List[str]:
         return ['--depfile', outfile]
+
+class MasmCompiler(Compiler):
+    language = 'masm'
+    id = 'ml'
+
+    def needs_static_linker(self) -> bool:
+        return False
+
+    def sanity_check(self, work_dir: str, environment: 'Environment') -> None:
+        pass
+
+    def get_always_args(self) -> T.List[str]:
+        return ['/nologo']
+
+    def get_optimization_args(self, optimization_level: str) -> T.List[str]:
+        return []
+
+    def get_compile_only_args(self) -> T.List[str]:
+        return ['/c']
+
+    def get_output_args(self, target: str) -> T.List[str]:
+        return ['/Fo' + target]
+
+    def get_debug_args(self, is_debug: bool) -> T.List[str]:
+        return ['/Zi', '/Zd'] if is_debug else []
+
+    def get_argument_syntax(self) -> str:
+        return 'msvc'
+
+class ArmAsmCompiler(MasmCompiler):
+    id = 'armasm'
+
+    def get_output_args(self, target: str) -> T.List[str]:
+        return ['-o', target]
+
+    def get_debug_args(self, is_debug: bool) -> T.List[str]:
+        return ['-g'] if is_debug else []
