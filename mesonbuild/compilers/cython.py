@@ -89,7 +89,13 @@ class CythonCompiler(Compiler):
     def depfile_for_object(self, objfile: str) -> T.Optional[str]:
         return None
 
-    def get_output_suffix(self, options: 'KeyedOptionDictType') -> str:
+    def _get_language(self, options: 'KeyedOptionDictType') -> str:
         lang = options[OptionKey('language', machine=self.for_machine, lang=self.language)].value
         assert isinstance(lang, str), 'for mypy'
         return lang
+
+    def get_extra_languages(self, source: 'mesonlib.File', options: 'KeyedOptionDictType') -> T.List[str]:
+        return [self._get_language(options)]
+
+    def get_output_suffix(self, options: 'KeyedOptionDictType') -> str:
+        return self._get_language(options)

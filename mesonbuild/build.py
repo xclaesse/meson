@@ -860,15 +860,12 @@ class BuildTarget(Target):
         # If this library is linked against another library we need to consider
         # the languages of those libraries as well.
         if self.link_targets or self.link_whole_targets:
-            extra = set()
             for t in itertools.chain(self.link_targets, self.link_whole_targets):
                 if isinstance(t, CustomTarget) or isinstance(t, CustomTargetIndex):
                     continue # We can't know anything about these.
                 for name, compiler in t.compilers.items():
-                    if name in link_langs:
-                        extra.add((name, compiler))
-            for name, compiler in sorted(extra, key=lambda p: sort_clink(p[0])):
-                self.compilers[name] = compiler
+                    if name in link_langs and not name in self.compilers:
+                        self.compilers[name] = compiler
 
         if not self.compilers:
             # No source files or parent targets, target consists of only object
@@ -883,8 +880,11 @@ class BuildTarget(Target):
         if self.structured_sources and 'rust' not in self.compilers:
             raise MesonException('structured sources are only supported in Rust targets')
         self.validate_sources()
+        # Re-sort according to clink_langs
+        self.compilers = OrderedDict(sorted(self.compilers.items(),
+                                            key=lambda t: sort_clink(t[0])))
 
-    def process_compilers(self) -> T.List[str]:
+    def process_compilers(self) -> T.Set[str]:
         '''
         Populate self.compilers, which is the list of compilers that this
         target will use for compiling all its sources.
@@ -893,9 +893,9 @@ class BuildTarget(Target):
         Returns a list of missing languages that we can add implicitly, such as
         C/C++ compiler for cython.
         '''
-        extra_languages = []
+        extra_languages = set()
         if not any([self.sources, self.generated, self.objects, self.structured_sources]):
-            return extra_languages
+            return []
         # Pre-existing sources
         sources: T.List['FileOrString'] = list(self.sources)
         generated = self.generated.copy()
@@ -946,27 +946,13 @@ class BuildTarget(Target):
                     if compiler.can_compile(s):
                         if lang not in self.compilers:
                             self.compilers[lang] = compiler
+                            extra_languages.update(compiler.get_extra_languages(s, {}))
                         break
                 else:
                     if is_known_suffix(s):
                         raise MesonException('No {} machine compiler for "{}"'.
                                              format(self.for_machine.get_lower_case_name(), s))
 
-            # Re-sort according to clink_langs
-            self.compilers = OrderedDict(sorted(self.compilers.items(),
-                                                key=lambda t: sort_clink(t[0])))
-
-        # If all our sources are Vala, our target also needs the C compiler but
-        # it won't get added above.
-        if 'vala' in self.compilers and 'c' not in self.compilers:
-            self.compilers['c'] = self.all_compilers['c']
-        if 'cython' in self.compilers:
-            key = OptionKey('language', machine=self.for_machine, lang='cython')
-            if key in self.option_overrides_compiler:
-                value = self.option_overrides_compiler[key]
-            else:
-                value = self.environment.coredata.options[key].value
-            extra_languages.append(value)
         return extra_languages
 
     def validate_sources(self):

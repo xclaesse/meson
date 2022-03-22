@@ -2832,7 +2832,9 @@ Try setting b_lundef to false instead.'''.format(self.coredata.options[OptionKey
 
         if isinstance(tobj, build.BuildTarget):
             extra_languages = tobj.process_compilers()
-            self.add_languages(extra_languages, True, tobj.for_machine)
+            new_languages = {i for i in extra_languages if i not in self.compilers}
+            if new_languages:
+                self.add_languages(new_languages, True, tobj.for_machine)
             tobj.process_compilers_late(extra_languages)
 
         self.build.targets[idname] = tobj

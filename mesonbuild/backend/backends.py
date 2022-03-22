@@ -834,6 +834,8 @@ class Backend:
             # .S files are preprocessed to .S.s first then compiled to .S.s.o
             if gen_source.endswith('.S'):
                 suffix = f's.{suffix}'
+            if not gen_source.startswith(meson_prefix):
+                gen_source = meson_prefix + gen_source
         return self.canonicalize_filename(gen_source) + '.' + suffix
 
     def determine_ext_objs(self, extobj: 'build.ExtractedObjects', proj_dir_to_build_root: str) -> T.List[str]:

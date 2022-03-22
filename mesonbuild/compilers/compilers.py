@@ -1289,6 +1289,9 @@ class Compiler(HoldableObject, metaclass=abc.ABCMeta):
         """Arguments to completely disable warnings."""
         return []
 
+    def get_extra_languages(self, source: 'mesonlib.File', options: 'KeyedOptionDictType') -> T.List[str]:
+        return []
+
     def get_output_suffix(self, options: 'KeyedOptionDictType') -> T.Optional[str]:
         """Suffix for compiled files, default to platform specific object file suffix.
 

@@ -421,6 +421,11 @@ class MSVCCompiler(VisualStudioLikeCompiler):
     def get_pch_base_name(self, header: str) -> str:
         return os.path.basename(header)
 
+    def get_extra_languages(self, source: 'mesonlib.File', options: 'KeyedOptionDictType') -> T.List[str]:
+        if source.endswith('.S'):
+            return ['masm']
+        return []
+
     def get_compiler_modes(self) -> T.List[CompilerMode]:
         return super().get_compiler_modes() + [
             MSVCPreprocessorMode(self),

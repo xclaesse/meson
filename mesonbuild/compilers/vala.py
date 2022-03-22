@@ -136,3 +136,6 @@ class ValaCompiler(Compiler):
 
     def thread_link_flags(self, env: 'Environment') -> T.List[str]:
         return []
+
+    def get_extra_languages(self, source: 'mesonlib.File', options: 'KeyedOptionDictType') -> T.List[str]:
+        return ['c']
