@@ -22,6 +22,15 @@ class NasmCompiler(Compiler):
     language = 'nasm'
     id = 'nasm'
 
+    # https://learn.microsoft.com/en-us/cpp/c-runtime-library/crt-library-features
+    crt_args = {
+        'none': [],
+        'md': ['/DEFAULTLIB:ucrt.lib', '/DEFAULTLIB:vcruntime.lib', '/DEFAULTLIB:msvcrt.lib'],
+        'mdd': ['/DEFAULTLIB:ucrtd.lib', '/DEFAULTLIB:vcruntimed.lib', '/DEFAULTLIB:msvcrtd.lib'],
+        'mt': ['/DEFAULTLIB:libucrt.lib', '/DEFAULTLIB:libvcruntime.lib', '/DEFAULTLIB:libcmt.lib'],
+        'mtd': ['/DEFAULTLIB:libucrtd.lib', '/DEFAULTLIB:libvcruntimed.lib', '/DEFAULTLIB:libcmtd.lib'],
+    }
+
     def needs_static_linker(self) -> bool:
         return True
 
@@ -95,6 +104,36 @@ class NasmCompiler(Compiler):
         return parameter_list
 
     def get_crt_compile_args(self, crt_val: str, buildtype: str) -> T.List[str]:
+        return []
+
+    # Linking ASM-only objects into an executable or DLL
+    # require this, otherwise it'll fail to find
+    # _WinMain or _DllMainCRTStartup.
+    def get_crt_link_args(self, crt_val: str, buildtype: str) -> T.List[str]:
+        if not self.info.is_windows():
+            return []
+        if crt_val in self.crt_args:
+            return self.crt_args[crt_val]
+        assert crt_val in {'from_buildtype', 'static_from_buildtype'}
+        dbg = 'mdd'
+        rel = 'md'
+        if crt_val == 'static_from_buildtype':
+            dbg = 'mtd'
+            rel = 'mt'
+        # Match what build type flags used to do.
+        if buildtype == 'plain':
+            return []
+        elif buildtype == 'debug':
+            return self.crt_args[dbg]
+        elif buildtype == 'debugoptimized':
+            return self.crt_args[rel]
+        elif buildtype == 'release':
+            return self.crt_args[rel]
+        elif buildtype == 'minsize':
+            return self.crt_args[rel]
+        else:
+            assert buildtype == 'custom'
+            raise mesonlib.EnvironmentException('Requested C runtime based on buildtype, but buildtype is "custom".')
         return []
 
 class YasmCompiler(NasmCompiler):
