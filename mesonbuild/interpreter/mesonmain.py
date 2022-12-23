@@ -350,7 +350,7 @@ class MesonMain(MesonInterpreterObject):
             # be a mix of both. We assume it is following default_library
             # value.
             self._override_dependency_impl(name, dep, kwargs, static=None)
-            if default_library == 'static':
+            if default_library.startswith('static'):
                 self._override_dependency_impl(name, dep, kwargs, static=True)
             elif default_library == 'shared':
                 self._override_dependency_impl(name, dep, kwargs, static=False)

@@ -295,7 +295,7 @@ class IntrospectionInterpreter(AstInterpreter):
         default_library = self.coredata.get_option(OptionKey('default_library'))
         if default_library == 'shared':
             return self.build_target(node, args, kwargs, SharedLibrary)
-        elif default_library == 'static':
+        elif default_library.startswith('static'):
             return self.build_target(node, args, kwargs, StaticLibrary)
         elif default_library == 'both':
             return self.build_target(node, args, kwargs, SharedLibrary)

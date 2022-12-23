@@ -3079,7 +3079,7 @@ Try setting b_lundef to false instead.'''.format(self.coredata.options[OptionKey
         default_library = self.coredata.get_option(OptionKey('default_library', subproject=self.subproject))
         if default_library == 'shared':
             return self.build_target(node, args, kwargs, build.SharedLibrary)
-        elif default_library == 'static':
+        elif default_library.startswith('static'):
             return self.build_target(node, args, kwargs, build.StaticLibrary)
         elif default_library == 'both':
             return self.build_both_libraries(node, args, kwargs)
