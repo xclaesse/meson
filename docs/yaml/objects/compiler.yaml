@@ -128,6 +128,21 @@ methods:
     - compiler._no_builtin_args
     - compiler._name
 
+- name: _has
+  returns: void
+  description: You have found a bug if you can see this!
+  kwargs_inherit: compiler._common
+  kwargs:
+    required:
+      type: bool | feature
+      default: false
+      since: 1.1.0
+      description:
+        When set to `true`, Meson will halt if the check fails.
+
+        When set to a [`feature`](Build-options.md#features) option, the feature
+        will control if it is searched and whether to fail if not found.
+
 - name: _header
   returns: void
   description: You have found a bug if you can see this!

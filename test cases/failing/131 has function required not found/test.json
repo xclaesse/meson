@@ -1,0 +1,7 @@
+{
+  "stdout": [
+    {
+      "line": "test cases/failing/131 has function required not found/meson.build:5:3: ERROR: C function 'asdfkawlegsdiovapfjhkr' not usable"
+    }
+  ]
+}

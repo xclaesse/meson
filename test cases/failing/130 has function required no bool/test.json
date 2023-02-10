@@ -1,0 +1,7 @@
+{
+  "stdout": [
+    {
+      "line": "test cases/failing/130 has function required no bool/meson.build:5:3: ERROR: compiler.has_function keyword argument 'required' was of type str but should have been one of: bool, UserFeatureOption"
+    }
+  ]
+}
