@@ -1,0 +1,9 @@
+{
+  "stdout": [
+    {
+      "match": "re",
+      "line": "ERROR: Meson version is [0-9.]+ but project requires 0.1.0"
+    }
+  ]
+}
+

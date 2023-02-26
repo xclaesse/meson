@@ -16,8 +16,7 @@
 # or an interpreter-based tool.
 from __future__ import annotations
 
-from .. import mparser, mesonlib
-from .. import environment
+from .. import coredata, environment, mparser, mesonlib
 
 from .baseobjects import (
     InterpreterObject,
@@ -103,6 +102,25 @@ class InterpreterBase:
         # current meson version target within that if-block.
         self.tmp_meson_version = None # type: T.Optional[str]
 
+    def handle_meson_version(self, pv: str) -> None:
+        if not mesonlib.version_compare(coredata.version, pv):
+            raise InterpreterException(f'Meson version is {coredata.version} but project requires {pv}')
+        mesonlib.project_meson_versions[self.subproject] = pv
+
+    def handle_meson_version_from_ast(self, ast: mparser.CodeBlockNode) -> None:
+        if not ast.lines:
+            return
+        project = ast.lines[0]
+        # first line is always project()
+        if not isinstance(project, mparser.FunctionNode):
+            return
+        for kw, val in project.args.kwargs.items():
+            assert isinstance(kw, mparser.IdNode), 'for mypy'
+            if kw.value == 'meson_version':
+                # mypy does not understand "and isinstance"
+                if isinstance(val, mparser.StringNode):
+                    self.handle_meson_version(val.value)
+
     def load_root_meson_file(self) -> None:
         mesonfile = os.path.join(self.source_root, self.subdir, environment.build_filename)
         if not os.path.isfile(mesonfile):
@@ -114,8 +132,13 @@ class InterpreterBase:
         assert isinstance(code, str)
         try:
             self.ast = mparser.Parser(code, mesonfile).parse()
-        except mesonlib.MesonException as me:
+            self.handle_meson_version_from_ast(self.ast)
+        except mparser.ParseException as me:
             me.file = mesonfile
+            # try to detect parser errors from new syntax added by future
+            # meson versions, and just tell the user to update meson
+            assert me.ast is not None
+            self.handle_meson_version_from_ast(me.ast)
             raise me
 
     def parse_project(self) -> None:

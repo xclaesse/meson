@@ -1151,11 +1151,7 @@ class Interpreter(InterpreterBase, HoldableObject):
         # This needs to be evaluated as early as possible, as meson uses this
         # for things like deprecation testing.
         if kwargs['meson_version']:
-            cv = coredata.version
-            pv = kwargs['meson_version']
-            if not mesonlib.version_compare(cv, pv):
-                raise InterpreterException(f'Meson version is {cv} but project requires {pv}')
-            mesonlib.project_meson_versions[self.subproject] = kwargs['meson_version']
+            self.handle_meson_version(kwargs['meson_version'])
 
         if os.path.exists(self.option_file):
             oi = optinterpreter.OptionInterpreter(self.subproject)
