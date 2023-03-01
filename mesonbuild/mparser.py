@@ -49,44 +49,33 @@ def decode_match(match: T.Match[str]) -> str:
         raise MesonUnicodeDecodeError(match.group(0))
 
 class ParseException(MesonException):
-    def __init__(self, text: str, line: str, lineno: int, colno: int) -> None:
-        # Format as error message, followed by the line with the error, followed by a caret to show the error column.
-        super().__init__(mlog.code_line(text, line, colno))
-        self.lineno = lineno
-        self.colno = colno
-
-class BlockParseException(MesonException):
     def __init__(
                 self,
                 text: str,
-                line: str,
-                lineno: int,
-                colno: int,
                 start_line: str,
                 start_lineno: int,
                 start_colno: int,
+                end_line: T.Optional[str] = None,
+                end_lineno: T.Optional[int] = None,
+                end_colno: T.Optional[int] = None,
             ) -> None:
-        # This can be formatted in two ways - one if the block start and end are on the same line, and a different way if they are on different lines.
-
-        if lineno == start_lineno:
-            # If block start and end are on the same line, it is formatted as:
-            # Error message
-            # Followed by the line with the error
-            # Followed by a caret to show the block start
-            # Followed by underscores
-            # Followed by a caret to show the block end.
-            super().__init__("{}\n{}\n{}".format(text, line, '{}^{}^'.format(' ' * start_colno, '_' * (colno - start_colno - 1))))
+        # Position can be a single place, a range on same line, or multiline.
+        # End position defaults to start position.
+        end_line = end_line or start_line
+        end_lineno = end_lineno or start_lineno
+        end_colno = end_colno or start_colno
+        if end_lineno == start_lineno:
+            # Same line
+            text = mlog.code_line(text, start_line, start_colno)
+            if end_colno != start_colno:
+                # Range
+                text += '_' * (end_colno - start_colno - 1) + '^'
         else:
-            # If block start and end are on different lines, it is formatted as:
-            # Error message
-            # Followed by the line with the error
-            # Followed by a caret to show the error column.
-            # Followed by a message saying where the block started.
-            # Followed by the line of the block start.
-            # Followed by a caret for the block start.
-            super().__init__("%s\n%s\n%s\nFor a block that started at %d,%d\n%s\n%s" % (text, line, '%s^' % (' ' * colno), start_lineno, start_colno, start_line, "%s^" % (' ' * start_colno)))
-        self.lineno = lineno
-        self.colno = colno
+            # multiline
+            text = mlog.code_line(text, end_line, end_colno)
+            text += f'\nFor a block that started at {start_lineno}:{start_colno}'
+            text += mlog.code_line('', start_line, start_colno)
+        super().__init__(text, lineno=end_lineno, colno=end_colno)
 
 TV_TokenTypes = T.TypeVar('TV_TokenTypes', int, str, bool)
 
@@ -208,7 +197,8 @@ class Lexer:
                         try:
                             value = ESCAPE_SEQUENCE_SINGLE_RE.sub(decode_match, value)
                         except MesonUnicodeDecodeError as err:
-                            raise MesonException(f"Failed to parse escape sequence: '{err.match}' in string:\n  {match_text}")
+                            raise ParseException(f"Failed to parse escape sequence: '{err.match}' in string:\n  {match_text}",
+                                                 self.getline(line_start), lineno, col)
                     elif tid in {'multiline_string', 'multiline_fstring'}:
                         # For multiline strings, parse out the value and pass
                         # through the normal string logic.
@@ -555,7 +545,8 @@ class Parser:
     def block_expect(self, s: str, block_start: Token) -> bool:
         if self.accept(s):
             return True
-        raise BlockParseException(f'Expecting {s} got {self.current.tid}.', self.getline(), self.current.lineno, self.current.colno, self.lexer.getline(block_start.line_start), block_start.lineno, block_start.colno)
+        raise ParseException(f'Expecting {s} got {self.current.tid}.', self.lexer.getline(block_start.line_start), block_start.lineno, block_start.colno,
+                             self.getline(), self.current.lineno, self.current.colno)
 
     def parse(self) -> CodeBlockNode:
         block = self.codeblock()
