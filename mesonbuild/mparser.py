@@ -76,6 +76,7 @@ class ParseException(MesonException):
             text += f'\nFor a block that started at {start_lineno}:{start_colno}'
             text += mlog.code_line('', start_line, start_colno)
         super().__init__(text, lineno=end_lineno, colno=end_colno)
+        self.ast: T.Optional[CodeBlockNode] = None
 
 TV_TokenTypes = T.TypeVar('TV_TokenTypes', int, str, bool)
 
@@ -841,7 +842,11 @@ class Parser:
         block = CodeBlockNode(self.current)
         cond = True
         while cond:
-            curline = self.line()
+            try:
+                curline = self.line()
+            except ParseException as e:
+                e.ast = block
+                raise
             if not isinstance(curline, EmptyNode):
                 block.lines.append(curline)
             cond = self.accept('eol')
