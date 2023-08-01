@@ -133,7 +133,6 @@ ENV_VAR_TOOL_MAP: T.Mapping[str, str] = {
     # Other tools
     'cmake': 'CMAKE',
     'qmake': 'QMAKE',
-    'pkgconfig': 'PKG_CONFIG',
     'pkg-config': 'PKG_CONFIG',
     'make': 'MAKE',
     'vapigen': 'VAPIGEN',
@@ -393,6 +392,10 @@ class MachineInfo(HoldableObject):
 
 class BinaryTable:
 
+    deprecated_map: T.Dict[str, str] = {
+        'pkgconfig': 'pkg-config',
+    }
+
     def __init__(
             self,
             binaries: T.Optional[T.Dict[str, T.Union[str, T.List[str]]]] = None,
@@ -400,6 +403,12 @@ class BinaryTable:
         self.binaries: T.Dict[str, T.List[str]] = {}
         if binaries:
             for name, command in binaries.items():
+                new_name = self.deprecated_map.get(name)
+                if new_name is not None:
+                    if new_name in binaries:
+                        raise EnvironmentException(f'Both {name} and {new_name} are specified, only {new_name} is supported')
+                    mlog.deprecation(f'Binary {name} is deprecated and should be replaced by {new_name}')
+                    name = new_name
                 if not isinstance(command, (list, str)):
                     raise mesonlib.MesonException(
                         f'Invalid type {command!r} for entry {name!r} in cross file')

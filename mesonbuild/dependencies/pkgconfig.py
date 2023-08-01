@@ -99,7 +99,7 @@ class PkgConfigDependency(ExternalDependency):
             assert cls.class_pkgbin[for_machine] is None, 'for mypy'
             mlog.debug(f'Pkg-config binary for {for_machine} is not cached.')
             for potential_pkgbin in find_external_program(
-                    env, for_machine, 'pkgconfig', 'Pkg-config',
+                    env, for_machine, 'pkg-config', 'Pkg-config',
                     env.default_pkgconfig, allow_default_for_cross=False):
                 version_if_ok = cls.check_pkgconfig(env, potential_pkgbin)
                 if not version_if_ok:
