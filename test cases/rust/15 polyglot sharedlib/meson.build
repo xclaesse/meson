@@ -8,7 +8,11 @@ thread_dep = dependency('threads')
 dl_dep = meson.get_compiler('c').find_library('dl', required: false)
 m_dep = meson.get_compiler('c').find_library('m', required: false)
 
-rl = static_library('radder', 'adder.rs', rust_crate_type: 'staticlib')
+subdir('zero')
+
+rl = static_library('radder', 'adder.rs',
+  rust_crate_type: 'staticlib',
+  link_with: [zero_shared, zero_static])
 
 l = shared_library('adder', 'adder.c',
     c_args: '-DBUILDING_ADDER',
