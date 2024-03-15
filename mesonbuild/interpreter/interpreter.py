@@ -1044,13 +1044,14 @@ class Interpreter(InterpreterBase, HoldableObject):
         from .. import cargo
         FeatureNew.single_use('Cargo subproject', '1.3.0', self.subproject, location=self.current_node)
         if self.environment.cargo is None:
+            self.add_languages(['rust'], True, MachineChoice.BUILD)
+            self.add_languages(['rust'], True, MachineChoice.HOST)
             self.environment.cargo = cargo.Interpreter(self.environment)
         with mlog.nested(subp_name):
-            ast = self.environment.cargo.interpret(subdir)
+            ast, build_def_files = self.environment.cargo.interpret(subdir)
             return self._do_subproject_meson(
                 subp_name, subdir, default_options, kwargs, ast,
-                # FIXME: Are there other files used by cargo interpreter?
-                [os.path.join(subdir, 'Cargo.toml')])
+                build_def_files)
 
     def get_option_internal(self, optname: str) -> options.UserOption:
         key = OptionKey.from_string(optname).evolve(subproject=self.subproject)
